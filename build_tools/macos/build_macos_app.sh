@@ -15,8 +15,35 @@ if [ "$ARCH" != "arm64" ]; then
   exit 1
 fi
 
-PY="${PYTHON:-python3}"
+# 源码使用了 Python 3.10+ 的 PEP 604 类型标注（X | None）
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for candidate in python3.13 python3.12 python3.11 python3.10; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PY="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "$PY" ]; then
+  echo "未找到 Python 3.10+，尝试通过 Homebrew 安装 python@3.12 ..." >&2
+  if command -v brew >/dev/null 2>&1; then
+    brew install python@3.12 >/dev/null
+    PY="$(brew --prefix python@3.12)/bin/python3.12"
+  else
+    echo "错误：请安装 Python 3.10+ 或 Homebrew 后重试。" >&2
+    exit 1
+  fi
+fi
 echo "Python: $($PY --version 2>&1)"
+
+# 使用独立虚拟环境，规避 macOS 的 PEP 668 externally-managed-environment 限制
+VENV="$ROOT/build_tools/macos/.venv"
+if [ ! -x "$VENV/bin/python" ]; then
+  $PY -m venv "$VENV"
+fi
+PY="$VENV/bin/python"
+echo "Virtual env Python: $($PY --version 2>&1)"
 
 # 1) 依赖：PySide6 在 macOS 提供 universal2 wheel（含 arm64）
 $PY -m pip install --upgrade pip
