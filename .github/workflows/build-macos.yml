@@ -1,7 +1,8 @@
 name: Build CXVideoCutter macOS arm64
 
 # 放到仓库根目录 .github/workflows/build-macos.yml 后在 GitHub Actions 上运行。
-# macos-14 / macos-latest 是 Apple Silicon (arm64) 原生 runner，可直接产出真机可运行的 .app。
+# macos-15 是 Apple Silicon (arm64) 原生 runner，可直接产出真机可运行的 .app。
+# macOS 14 镜像已于 2026-11-02 退役，因此固定使用 macos-15。
 on:
   workflow_dispatch:
   push:
@@ -9,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 

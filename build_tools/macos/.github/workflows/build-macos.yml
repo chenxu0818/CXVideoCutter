@@ -1,0 +1,33 @@
+name: Build CXVideoCutter macOS arm64
+
+# 放到仓库根目录 .github/workflows/build-macos.yml 后在 GitHub Actions 上运行。
+# macos-15 是 Apple Silicon (arm64) 原生 runner，可直接产出真机可运行的 .app。
+# macOS 14 镜像已于 2026-11-02 退役，因此固定使用 macos-15。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build app bundle
+        run: bash build_tools/macos/build_macos_app.sh
+
+      - name: Zip app
+        run: cd dist && zip -ry CXVideoCutter-macos-arm64.zip CXVideoCutter.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CXVideoCutter-macos-arm64
+          path: dist/CXVideoCutter-macos-arm64.zip
+          retention-days: 30
