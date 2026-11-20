@@ -1,0 +1,3 @@
+# 运行依赖（ffmpeg / ffprobe 需自行安装并加入 PATH，或放在 EXE 同目录）
+PySide6>=6.6
+PyInstaller>=6.0
