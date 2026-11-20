@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller 中间产物
+/build_new/
+*.spec
+
+# 本地编译工具链、下载的 wheel、编译出的 ffmpeg（约 2.9 GB），不入库
+/build_tools/*
+!/build_tools/macos/
+/build_tools/macos/*
+!/build_tools/macos/build_macos_app.sh
+
+# 打包产物与运行时生成内容
+/dist/
+/log/
+/output/
+/settings.ini
+
+# 系统文件
+.DS_Store
+Thumbs.db
