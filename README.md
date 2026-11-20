@@ -29,8 +29,8 @@
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
-| Windows x64 | `CXVideoCutter-x64.exe` | 适用于 64 位 Windows |
-| Windows ARM64 | `CXVideoCutter-arm64.exe` | 适用于 ARM64 Windows 设备 |
+| Windows x64 | `CXVideoCutter-win-x64.exe` | 适用于 64 位 Windows |
+| Windows ARM64 | `CXVideoCutter-win-arm64.exe` | 适用于 ARM64 Windows 设备 |
 | macOS Apple Silicon | `CXVideoCutter-macos-arm64.zip` | 解压得到 `CXVideoCutter.app` |
 
 macOS 首次打开时，如被 Gatekeeper 拦截，可右键 `.app` 选择“打开”，或在“系统设置 → 隐私与安全性”中允许。发布包已做 ad-hoc 签名，面向他人分发时仍需按 Apple 要求公证。
@@ -73,21 +73,25 @@ macOS 首次打开时，如被 Gatekeeper 拦截，可右键 `.app` 选择“打
 
 ## 界面截图
 
-以下截图尚未上传。请把图片按表中文件名放入 `docs/images/`，然后删除本提示并将表格中的路径改为图片引用即可显示。
+主界面：预览区、时间轴、帧预览条与右侧面板。
 
-| 状态 | 文件名 | 建议内容 |
-| --- | --- | --- |
-| 待上传 | `docs/images/01-main-window.png` | 打开视频后的主界面：预览区、时间轴、帧预览条、右侧面板 |
-| 待上传 | `docs/images/02-segments.png` | 已添加多个片段，展示缩略图、起止时间、时长 |
-| 待上传 | `docs/images/03-tracks-chapters.png` | 轨道管理勾选框与章节列表 |
-| 待上传 | `docs/images/04-export-settings.png` | 导出设置面板：方式、分辨率、格式、输出目录 |
-| 待上传 | `docs/images/05-settings-theme.png` | 设置对话框：语言、主题、片段重叠、输出目录 |
+![主界面](docs/images/01-main-window.png)
 
-<!-- SCREENSHOT TODO: docs/images/01-main-window.png | 打开视频后的主界面 -->
-<!-- SCREENSHOT TODO: docs/images/02-segments.png | 多段选择与已选片段列表 -->
-<!-- SCREENSHOT TODO: docs/images/03-tracks-chapters.png | 轨道管理与章节 -->
-<!-- SCREENSHOT TODO: docs/images/04-export-settings.png | 导出设置 -->
-<!-- SCREENSHOT TODO: docs/images/05-settings-theme.png | 设置与主题 -->
+多段选择：已选片段展示首帧缩略图、起止时间与时长。
+
+![多段选择](docs/images/02-segments.png)
+
+轨道管理与章节：可勾选参与导出的轨道，并按时间点管理章节。
+
+![轨道管理与章节](docs/images/03-tracks-chapters.png)
+
+导出设置：导出方式、分辨率、格式与输出目录。
+
+![导出设置](docs/images/04-export-settings.png)
+
+设置：界面语言、主题、片段重叠策略与输出目录。
+
+![设置与主题](docs/images/05-settings-theme.png)
 
 ## 从源码运行
 
@@ -125,14 +129,16 @@ CXVideoCutter/
 │   ├── ui/                     # 主窗口、时间轴、帧预览、轨道、导出、设置等界面
 │   └── resources/              # 应用图标
 ├── build_tools/                # FFmpeg 构建脚本、ARM64 与 macOS 打包脚本
+├── docs/images/                # README 界面截图
 ├── .github/workflows/          # 三平台构建与 Release 工作流
+├── LICENSE                     # GPL-3.0-or-later 许可证全文
 ├── THIRD_PARTY_NOTICES.md      # 第三方二进制许可说明
 └── README.md
 ```
 
 ## 许可与第三方组件
 
-本项目暂未指定开源许可证。源码中附带的 FFmpeg / x264 预编译二进制以 GPLv3 兼容方式编译，分发时请遵守 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的要求。
+本项目采用 [GPL-3.0-or-later](LICENSE) 许可证。源码中附带的 FFmpeg / x264 预编译二进制以 GPLv3 兼容方式编译，分发时请遵守 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的要求。
 
 本项目使用的主要第三方组件：
 
