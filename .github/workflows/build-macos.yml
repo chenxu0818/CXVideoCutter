@@ -1,33 +1,115 @@
-name: Build CXVideoCutter macOS arm64
+name: Build and Release CXVideoCutter
 
-# 放到仓库根目录 .github/workflows/build-macos.yml 后在 GitHub Actions 上运行。
-# macos-15 是 Apple Silicon (arm64) 原生 runner，可直接产出真机可运行的 .app。
-# macOS 14 镜像已于 2026-11-02 退役，因此固定使用 macos-15。
+# 一次触发构建三端产物并发布 Release v1.0.0：
+#   - Windows x64          CXVideoCutter-x64.exe
+#   - Windows ARM64        CXVideoCutter-arm64.exe（交叉冻结，内嵌全 ARM64 二进制）
+#   - macOS Apple Silicon  CXVideoCutter.app -> CXVideoCutter-macos-arm64.zip
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  windows-x64:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PySide6==6.12.0" "PyInstaller==6.22.3"
+      - name: Build x64 EXE
+        shell: bash
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --noconsole \
+            --name CXVideoCutter-x64 \
+            --icon app/resources/icon.ico \
+            --add-data "app/resources/icon.ico;app/resources" \
+            --add-data "build_tools/ffmpeg-install/bin/ffmpeg.exe;ffmpeg" \
+            --add-data "build_tools/ffmpeg-install/bin/ffprobe.exe;ffmpeg" \
+            --distpath dist-win-x64 --workpath build-win-x64 --specpath build-win-x64 \
+            --exclude-module tkinter --exclude-module numpy --exclude-module torch \
+            --exclude-module gradio --exclude-module matplotlib --exclude-module PIL \
+            main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist-win-x64/CXVideoCutter-x64.exe
+          if-no-files-found: error
+
+  windows-arm64:
+    name: Windows ARM64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install x64 analysis dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PySide6==6.12.0" "PyInstaller==6.22.3"
+      - name: Download ARM64 wheels and Python runtime
+        shell: bash
+        run: |
+          mkdir -p build_tools/arm64/downloads
+          python -m pip download --no-deps --platform win_arm64 --python-version 3.13 \
+            --only-binary=:all: --dest build_tools/arm64/downloads \
+            "PySide6==6.12.0" "PySide6-Essentials==6.12.0" "PySide6-Addons==6.12.0" \
+            "shiboken6==6.12.0" "PyInstaller==6.22.3"
+          curl -L --fail --retry 2 \
+            -o build_tools/arm64/downloads/python-3.13.14-embed-arm64.zip \
+            https://www.python.org/ftp/python/3.13.14/python-3.13.14-embed-arm64.zip
+      - name: Unpack ARM64 assets
+        run: python build_tools/arm64/prepare_assets.py
+      - name: Cross-freeze ARM64 EXE
+        run: python build_tools/arm64/build_arm64_exe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm64
+          path: build_tools/arm64/dist/CXVideoCutter-arm64.exe
+          if-no-files-found: error
+
+  macos-arm64:
+    name: macOS Apple Silicon
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Build app bundle
+      - name: Build .app bundle
         run: bash build_tools/macos/build_macos_app.sh
-
-      - name: Zip app
+      - name: Zip app bundle
         run: cd dist && zip -ry CXVideoCutter-macos-arm64.zip CXVideoCutter.app
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: CXVideoCutter-macos-arm64
+          name: macos-arm64
           path: dist/CXVideoCutter-macos-arm64.zip
-          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Publish Release v1.0.0
+    needs: [windows-x64, windows-arm64, macos-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: v1.0.0
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/windows-x64/CXVideoCutter-x64.exe
+            artifacts/windows-arm64/CXVideoCutter-arm64.exe
+            artifacts/macos-arm64/CXVideoCutter-macos-arm64.zip

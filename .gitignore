@@ -9,11 +9,30 @@ venv/
 /build_new/
 *.spec
 
-# 本地编译工具链、下载的 wheel、编译出的 ffmpeg（约 2.9 GB），不入库
+# 本地编译工具链、下载的 wheel、中间产物不入库；仅保留 CI 需要的脚本与预编译 ffmpeg
 /build_tools/*
 !/build_tools/macos/
+!/build_tools/ffmpeg-install/
+!/build_tools/arm64/
+
 /build_tools/macos/*
 !/build_tools/macos/build_macos_app.sh
+
+/build_tools/ffmpeg-install/*
+!/build_tools/ffmpeg-install/bin/
+/build_tools/ffmpeg-install/bin/*
+!/build_tools/ffmpeg-install/bin/ffmpeg.exe
+!/build_tools/ffmpeg-install/bin/ffprobe.exe
+
+/build_tools/arm64/*
+!/build_tools/arm64/prepare_assets.py
+!/build_tools/arm64/build_arm64_exe.py
+!/build_tools/arm64/ffmpeg-install/
+/build_tools/arm64/ffmpeg-install/*
+!/build_tools/arm64/ffmpeg-install/bin/
+/build_tools/arm64/ffmpeg-install/bin/*
+!/build_tools/arm64/ffmpeg-install/bin/ffmpeg.exe
+!/build_tools/arm64/ffmpeg-install/bin/ffprobe.exe
 
 # 打包产物与运行时生成内容
 /dist/
