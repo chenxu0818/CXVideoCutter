@@ -16,6 +16,7 @@ from ..core.theme import palette
 
 
 TICK_STEPS = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]
+MIN_DRAG_SECONDS = 5.0
 
 
 class _Canvas(QWidget):
@@ -171,7 +172,7 @@ class _Canvas(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if self._drag_start is not None:
             a, b = sorted((self._drag_start, self._drag_end))
-            if b - a >= 0.08:
+            if b - a >= MIN_DRAG_SECONDS:
                 self.segmentCreated.emit(a, b)
             else:
                 self.seekRequested.emit(a)

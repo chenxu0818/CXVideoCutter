@@ -52,3 +52,30 @@ def log_warn(message: str) -> None:
 
 def log_error(message: str) -> None:
     log(message, "ERROR")
+
+
+def cleanup_old_logs(days: int = 30) -> int:
+    """删除 days 天之前的日志文件，返回删除数量。
+
+    只处理根目录下 YYYY-MM-DD.log 形式的文件，其他文件不受影响。
+    """
+    directory = log_dir()
+    if not os.path.isdir(directory):
+        return 0
+    cutoff = datetime.date.today() - datetime.timedelta(days=max(1, int(days)))
+    removed = 0
+    with _LOCK:
+        for name in os.listdir(directory):
+            if not name.endswith(".log"):
+                continue
+            try:
+                day = datetime.date.fromisoformat(name[:-4])
+            except ValueError:
+                continue
+            if day < cutoff:
+                try:
+                    os.remove(os.path.join(directory, name))
+                    removed += 1
+                except OSError:
+                    pass
+    return removed

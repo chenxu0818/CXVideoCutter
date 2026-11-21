@@ -1,8 +1,8 @@
 name: Build and Release CXVideoCutter
 
 # 一次触发构建三端产物并发布 Release v1.0.0：
-#   - Windows x64          CXVideoCutter-x64.exe
-#   - Windows ARM64        CXVideoCutter-arm64.exe（交叉冻结，内嵌全 ARM64 二进制）
+#   - Windows x64          CXVideoCutter-win-x64.exe
+#   - Windows ARM64        CXVideoCutter-win-arm64.exe（交叉冻结，内嵌全 ARM64 二进制）
 #   - macOS Apple Silicon  CXVideoCutter.app -> CXVideoCutter-macos-arm64.zip
 on:
   workflow_dispatch:
@@ -29,20 +29,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist-win-x64 build-win-x64
-          python -m PyInstaller --noconfirm --clean --onefile --noconsole \
-            --name CXVideoCutter-x64 \
-            --icon app/resources/icon.ico \
-            --add-data "app/resources/icon.ico;app/resources" \
-            --add-data "build_tools/ffmpeg-install/bin/ffmpeg.exe;ffmpeg" \
-            --add-data "build_tools/ffmpeg-install/bin/ffprobe.exe;ffmpeg" \
+          python -m PyInstaller --noconfirm --clean \
             --distpath dist-win-x64 --workpath build-win-x64 \
-            --exclude-module tkinter --exclude-module numpy --exclude-module torch \
-            --exclude-module gradio --exclude-module matplotlib --exclude-module PIL \
-            main.py
+            build_tools/windows/build_x64.spec
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
-          path: dist-win-x64/CXVideoCutter-x64.exe
+          path: dist-win-x64/CXVideoCutter-win-x64.exe
           if-no-files-found: error
 
   windows-arm64:
@@ -75,7 +68,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-arm64
-          path: build_tools/arm64/dist/CXVideoCutter-arm64.exe
+          path: build_tools/arm64/dist/CXVideoCutter-win-arm64.exe
           if-no-files-found: error
 
   macos-arm64:
@@ -114,6 +107,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            artifacts/windows-x64/CXVideoCutter-x64.exe
-            artifacts/windows-arm64/CXVideoCutter-arm64.exe
+            artifacts/windows-x64/CXVideoCutter-win-x64.exe
+            artifacts/windows-arm64/CXVideoCutter-win-arm64.exe
             artifacts/macos-arm64/CXVideoCutter-macos-arm64.zip

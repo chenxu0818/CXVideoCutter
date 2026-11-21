@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from app.core.logger import cleanup_old_logs  # noqa: E402
 from app.core.settings import AppSettings  # noqa: E402
 from app.core.theme import apply_theme  # noqa: E402
 from app.ui.app_icon import app_icon  # noqa: E402
@@ -23,6 +24,7 @@ def main() -> None:
     app.setWindowIcon(app_icon())
     app.setApplicationName("CXVideoCutter")
     app.setOrganizationName("CXVideoCutter")
+    cleanup_old_logs(30)
     apply_theme(app, AppSettings().theme())
     window = MainWindow()
     window.show()

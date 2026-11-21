@@ -20,15 +20,17 @@ from PySide6.QtWidgets import (
 from ..core.exporter import ExportWorker
 from ..core.ffmpeg import format_time, probe_media, probe_version
 from ..core.i18n import set_language, tr
-from ..core.logger import log_error, log_info
+from ..core.logger import cleanup_old_logs, log_error, log_info
 from ..core.models import Chapter, MediaSource, Segment
 from ..core.settings import AppSettings, default_output_dir
+from ..core.taskbar_progress import TaskbarProgress
 from ..core.theme import apply_theme
 from .app_icon import app_icon
 from .export_dialog import ExportDialog
 from .export_panel import ExportPanel
 from .filmstrip import FilmstripLoader, FilmstripWidget
 from .helpers import FrameView, KeyframeLoader, PreviewFrameLoader, ThumbnailLoader, TimeEdit
+from .log_dialog import LogDialog
 from .msgbox import ask_yes_no, show_about, show_info, show_warning
 from .segment_panel import SegmentPanel
 from .settings_dialog import SettingsDialog
@@ -68,6 +70,8 @@ class MainWindow(QMainWindow):
         self._preview_path = os.path.join(tempfile.gettempdir(), "cxvc_preview_frame.jpg")
         self._preview_time = -1.0
         self._preview_applied_id = 0
+        self._video_page_ready = False
+        self._taskbar = TaskbarProgress()
 
         # 帧预览条：当前帧居中，左右为前后帧
         self.filmstrip = FilmstripWidget(self)
@@ -93,6 +97,9 @@ class MainWindow(QMainWindow):
         self.player.setVideoOutput(self.video_widget)
         self.player.positionChanged.connect(self._on_player_position)
         self.player.playbackStateChanged.connect(self._on_playback_state)
+        sink = self.player.videoSink()
+        if sink is not None and hasattr(sink, "videoFrameChanged"):
+            sink.videoFrameChanged.connect(self._on_video_frame)
 
         # 静帧预览（用 ffmpeg 按时间点抽帧，暂停/逐帧时显示，避免 QVideoWidget 停留在旧画面）
         self._preview_loader = PreviewFrameLoader(self)
@@ -136,6 +143,18 @@ class MainWindow(QMainWindow):
         self._preview_applied_id = rid
         if self.frame_view.setPixmapPath(path):
             self._show_frame_view()
+
+    def _on_video_frame(self, frame) -> None:
+        """首个有效视频帧到达后再切换，避免播放初期黑屏。"""
+        if frame is None or not getattr(frame, "isValid", lambda: True)():
+            return
+        if not self._video_page_ready:
+            self._video_page_ready = True
+            self._show_video_view()
+
+    def _fallback_video_view(self) -> None:
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self._show_video_view()
 
     # ------------------------------------------------------------------
     # 帧预览条
@@ -206,6 +225,11 @@ class MainWindow(QMainWindow):
         self.act_settings.triggered.connect(self.open_settings)
         self.menu_settings.addAction(self.act_settings)
 
+        self.menu_log = self.menuBar().addMenu(tr("日志(&L)"))
+        self.act_logs = QAction(tr("查看日志…"), self)
+        self.act_logs.triggered.connect(self.open_logs)
+        self.menu_log.addAction(self.act_logs)
+
         self.menu_help = self.menuBar().addMenu(tr("帮助(&H)"))
         self.act_about = QAction(tr("关于"), self)
         self.act_about.triggered.connect(self._about)
@@ -248,10 +272,23 @@ class MainWindow(QMainWindow):
         preview_layout.addWidget(self.preview_stack, 1)
         self.preview.setMinimumHeight(320)
         self.preview_stack.setCurrentIndex(0)
-        left_layout.addWidget(self.preview, 9)   # 视频窗口占绝大部分高度
+        # 左侧上下分割：视频预览高度可拖拽调整，右侧仍可调整宽度
+        left_splitter = QSplitter(Qt.Orientation.Vertical)
+        left_splitter.addWidget(self.preview)
+        controls = QWidget()
+        controls_layout = QVBoxLayout(controls)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(2)
+        left_splitter.addWidget(controls)
+        left_splitter.setSizes([560, 360])
+        left_splitter.setStretchFactor(0, 1)
+        left_splitter.setStretchFactor(1, 0)
+        left_splitter.setCollapsible(0, True)
+        left_splitter.setCollapsible(1, False)
+        left_layout.addWidget(left_splitter, 1)
 
         # 帧预览条（当前帧居中）
-        left_layout.addWidget(self.filmstrip)
+        controls_layout.addWidget(self.filmstrip)
 
         # 播放控制
         play_row = QHBoxLayout()
@@ -263,11 +300,21 @@ class MainWindow(QMainWindow):
         self.time_label = QLabel("00:00:00.000 / 00:00:00.000")
         self.time_label.setMinimumWidth(230)
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.btn_mute = QPushButton(tr("静音"))
+        self.btn_mute.setCheckable(True)
+        self.btn_mute.setFixedWidth(48)
+        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setValue(80)
+        self.volume_slider.setFixedWidth(84)
+        self.volume_slider.setToolTip(tr("音量"))
         play_row.addWidget(self.btn_play)
         play_row.addWidget(self.btn_stop)
         play_row.addWidget(self.position_slider, 1)
+        play_row.addWidget(self.btn_mute)
+        play_row.addWidget(self.volume_slider)
         play_row.addWidget(self.time_label)
-        left_layout.addLayout(play_row)
+        controls_layout.addLayout(play_row)
 
         # 步进控制
         step_row = QHBoxLayout()
@@ -287,7 +334,7 @@ class MainWindow(QMainWindow):
         step_row.addWidget(step_widget)
         self._step_labels.append(label)
         step_row.addStretch(1)
-        left_layout.addLayout(step_row)
+        controls_layout.addLayout(step_row)
 
         # 入点 / 出点
         self.timeline = Timeline()
@@ -332,16 +379,18 @@ class MainWindow(QMainWindow):
         io_row.addWidget(self.btn_zoom_out)
         io_row.addSpacing(6)
         io_row.addWidget(self.btn_zoom_in)
-        left_layout.addLayout(io_row)
+        controls_layout.addLayout(io_row)
 
         # 时间轴
-        self.timeline.setToolTip(tr("时间轴（单击定位，拖拽选择片段，Ctrl+滚轮缩放）"))
+        self.timeline.setToolTip(
+            tr("时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）")
+        )
         self.timeline.seekRequested.connect(self.seek)
         self.timeline.segmentCreated.connect(self.add_segment)
         self.timeline.positionChanged.connect(
             lambda t: self.statusBar().showMessage(f"{tr('鼠标位置：')}{format_time(t)}", 2000)
         )
-        left_layout.addWidget(self.timeline, 0)
+        controls_layout.addWidget(self.timeline, 0)
 
         # 右侧：片段 + 轨道
         right = QWidget()
@@ -423,6 +472,8 @@ class MainWindow(QMainWindow):
     def _wire(self) -> None:
         self.btn_play.clicked.connect(self.toggle_play)
         self.btn_stop.clicked.connect(self.stop)
+        self.btn_mute.clicked.connect(self._toggle_mute)
+        self.volume_slider.valueChanged.connect(self._on_volume_changed)
         self.position_slider.sliderMoved.connect(lambda v: self.seek(v / 1000.0))
         self.segment_panel.removeRequested.connect(self.remove_segment)
         self.segment_panel.locateRequested.connect(self._locate_segment)
@@ -456,6 +507,7 @@ class MainWindow(QMainWindow):
             return
 
         self.player.stop()
+        self._video_page_ready = False
         self.sources = [source]
         self.segments = []
         self.chapters = []
@@ -533,11 +585,27 @@ class MainWindow(QMainWindow):
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         self.btn_play.setText(tr("⏸ 暂停") if playing else tr("▶ 播放"))
         if playing:
-            self._show_video_view()
+            if self._video_page_ready:
+                self._show_video_view()
+            else:
+                # 兜底：个别后端不触发 videoFrameChanged 时也能在短时间内切过去
+                QTimer.singleShot(300, self._fallback_video_view)
         else:
+            self._video_page_ready = False
             # 暂停/停止后用 ffmpeg 精确抽取当前帧，避免停留在旧画面
             self._request_preview_frame()
             self._request_filmstrip()
+
+    def _on_volume_changed(self, value: int) -> None:
+        self.audio_output.setVolume(max(0.0, min(1.0, value / 100.0)))
+        if value > 0 and self.audio_output.muted():
+            self.audio_output.setMuted(False)
+            self.btn_mute.setChecked(False)
+            self.btn_mute.setText(tr("静音"))
+
+    def _toggle_mute(self, checked: bool) -> None:
+        self.audio_output.setMuted(checked)
+        self.btn_mute.setText(tr("取消静音") if checked else tr("静音"))
 
     def _update_time_label(self) -> None:
         total = self.sources[0].duration if self.sources else 0.0
@@ -770,6 +838,11 @@ class MainWindow(QMainWindow):
             self.timeline.canvas.update()
             self.statusBar().showMessage(tr("设置已保存"))
 
+    def open_logs(self) -> None:
+        cleanup_old_logs(30)
+        dialog = LogDialog(self)
+        dialog.exec()
+
     def open_export_dialog(self) -> None:
         self.export_panel._update_settings()
         self.export_dialog.show()
@@ -798,6 +871,9 @@ class MainWindow(QMainWindow):
         self.export_panel.setBusy(True)
         self.export_panel.setProgress(0, tr("准备导出…"))
         self.export_dialog.setBusy(True)
+        self._taskbar.set_hwnd(int(self.winId()))
+        self._taskbar.set_state(self._taskbar.TBPF_NORMAL)
+        self._taskbar.set_value(0)
         self._worker = ExportWorker(settings, list(self.sources), list(self.segments), list(self.chapters), self)
         self._worker.progress.connect(self._on_export_progress)
         self._worker.succeeded.connect(self._on_export_done)
@@ -807,20 +883,26 @@ class MainWindow(QMainWindow):
 
     def _on_export_progress(self, value: int, message: str) -> None:
         self.export_panel.setProgress(value, message)
+        self._taskbar.set_value(value)
 
     def _on_export_done(self, outputs: List[str]) -> None:
+        self._taskbar.set_value(100)
         self.export_panel.reset()
         self.export_dialog.setBusy(False)
+        self._taskbar.reset()
         show_info(self, tr("完成"), tr("导出完成：") + "\n".join(outputs))
 
     def _on_export_failed(self, message: str) -> None:
+        self._taskbar.set_state(self._taskbar.TBPF_ERROR)
         self.export_panel.reset()
         self.export_dialog.setBusy(False)
+        self._taskbar.reset()
         show_warning(self, tr("导出失败"), message)
 
     def _on_export_cancelled(self, success: bool, reason: str) -> None:
         self.export_panel.reset()
         self.export_dialog.setBusy(False)
+        self._taskbar.reset()
         if success:
             show_info(self, tr("取消成功"), tr("取消成功"))
         else:
@@ -840,6 +922,7 @@ class MainWindow(QMainWindow):
         self.menu_file.setTitle(tr("文件(&F)"))
         self.menu_edit.setTitle(tr("编辑(&E)"))
         self.menu_settings.setTitle(tr("设置(&S)"))
+        self.menu_log.setTitle(tr("日志(&L)"))
         self.menu_help.setTitle(tr("帮助(&H)"))
         self.act_open.setText(tr("打开视频…"))
         self.act_audio.setText(tr("添加外部音轨…"))
@@ -848,6 +931,7 @@ class MainWindow(QMainWindow):
         self.act_add_seg.setText(tr("添加当前片段"))
         self.act_clear.setText(tr("清空所有片段"))
         self.act_settings.setText(tr("设置…"))
+        self.act_logs.setText(tr("查看日志…"))
         self.act_about.setText(tr("关于"))
         self.btn_open.setText(tr("打开视频"))
         self.btn_export_top.setText(tr("导出"))
@@ -858,6 +942,8 @@ class MainWindow(QMainWindow):
             else tr("▶ 播放")
         )
         self.btn_stop.setText(tr("■ 停止"))
+        self.btn_mute.setText(tr("取消静音") if self.btn_mute.isChecked() else tr("静音"))
+        self.volume_slider.setToolTip(tr("音量"))
         self.label_seek.setText(tr("精确定位："))
         for label, text in zip(self._step_labels, (tr("逐帧:"), tr("1 秒:"), tr("30 秒:"))):
             label.setText(text)
@@ -866,7 +952,9 @@ class MainWindow(QMainWindow):
         self.btn_set_in.setText(tr("设为起点 (I)"))
         self.btn_set_out.setText(tr("设为终点 (O)"))
         self.btn_add_seg.setText(tr("+ 添加片段"))
-        self.timeline.setToolTip(tr("时间轴（单击定位，拖拽选择片段，Ctrl+滚轮缩放）"))
+        self.timeline.setToolTip(
+            tr("时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）")
+        )
         self.btn_zoom_in.setText(tr("放大 +"))
         self.btn_zoom_out.setText(tr("缩小 −"))
         self._act_play.setText(tr("播放/暂停"))
@@ -880,6 +968,7 @@ class MainWindow(QMainWindow):
         show_about(self, tr("关于"), tr("关于文本") + probe_version())
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        self._taskbar.reset()
         self.player.stop()
         self._thumb_loader.stop()
         self._preview_loader.stop()

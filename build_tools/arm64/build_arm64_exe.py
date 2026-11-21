@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ARM = ROOT / "build_tools" / "arm64"
 DOWN = ARM / "downloads"
-SPEC = ARM / "CXVideoCutter-arm64.spec"
+SPEC = ARM / "CXVideoCutter-win-arm64.spec"
 DIST = ARM / "dist"
 WORK = ARM / "work"
 FFMPEG = ARM / "ffmpeg-install" / "bin" / "ffmpeg.exe"
@@ -141,7 +141,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CXVideoCutter-arm64',
+    name='CXVideoCutter-win-arm64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -210,7 +210,7 @@ def main() -> None:
     ]
     print("run:", " ".join(cmd))
     subprocess.run(cmd, cwd=str(ROOT), check=True)
-    output = DIST / "CXVideoCutter-arm64.exe"
+    output = DIST / "CXVideoCutter-win-arm64.exe"
     validate_exe(output)
     print("output:", output)
 
