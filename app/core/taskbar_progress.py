@@ -43,13 +43,18 @@ class GUID(Structure):
     ]
 
 
+# 注意：以下 GUID 必须精确匹配 Windows SDK 定义，写错会导致 CoCreateInstance
+# 返回 REGDB_E_CLASSNOTREG (0x80040154) —— 表现为任务栏进度完全不显示。
+# CLSID_TaskbarList   = 56FDF344-FD6D-11D0-958A-006097C9A090
+# IID_ITaskbarList3   = EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF
+# IID_IClassFactory   = 00000001-0000-0000-C000-000000000046
 CLSID_TaskbarList = GUID(
-    0x56CD7819, 0xCDDC, 0x4216,
-    (c_ubyte * 8)(0x84, 0x29, 0x29, 0x66, 0xA9, 0xDD, 0x3F, 0x75),
+    0x56FDF344, 0xFD6D, 0x11D0,
+    (c_ubyte * 8)(0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90),
 )
 IID_ITaskbarList3 = GUID(
-    0xEA1B63D1, 0x3B65, 0x43CF,
-    (c_ubyte * 8)(0xBC, 0x2B, 0xD4, 0x7E, 0x4B, 0x9C, 0x3D, 0x8E),
+    0xEA1AFB91, 0x9E28, 0x4B86,
+    (c_ubyte * 8)(0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF),
 )
 IID_IClassFactory = GUID(
     0x00000001, 0x0000, 0x0000,
@@ -138,17 +143,29 @@ class TaskbarProgress:
                 log_warn(f"任务栏进度：所有创建路径失败，最后 hr={_hr_text(hr)}")
                 return
 
-            table = cast(ptr.value, POINTER(c_void_p))
+            # 必须用方式 cast(p, POINTER(POINTER(c_void_p))).contents 读取 vtable：
+            # cast(ptr.value, POINTER(c_void_p)) 在部分 Python 3.13 + ctypes 上
+            # 会按错误偏移解引用，读出垃圾地址，导致后续调用崩溃或无效。
+            table = cast(ptr, POINTER(POINTER(c_void_p))).contents
             self._tb = ptr
+
+            def _addr(index: int) -> int:
+                item = table[index]
+                if item is None:
+                    return 0
+                return item if isinstance(item, int) else int(item.value)
+
             # IUnknown: 0/1/2；ITaskbarList: HrInit=3, AddTab=4；
             # ITaskbarList2: MarkFullscreenWindow=8；
             # ITaskbarList3: SetProgressValue=9, SetProgressState=10
-            self._hr_init = WINFUNCTYPE(c_int, c_void_p)(table[3])
-            self._add_tab = WINFUNCTYPE(c_int, c_void_p, c_void_p)(table[4])
+            self._hr_init = WINFUNCTYPE(c_int, c_void_p)(_addr(3))
+            self._add_tab = WINFUNCTYPE(c_int, c_void_p, c_void_p)(_addr(4))
             self._set_value = WINFUNCTYPE(
                 c_int, c_void_p, c_void_p, c_ulonglong, c_ulonglong
-            )(table[9])
-            self._set_state = WINFUNCTYPE(c_int, c_void_p, c_void_p, c_int)(table[10])
+            )(_addr(9))
+            self._set_state = WINFUNCTYPE(
+                c_int, c_void_p, c_void_p, c_int
+            )(_addr(10))
 
             hr_init = self._hr_init(self._tb)
             log_info(f"任务栏进度：HrInit hr={_hr_text(hr_init)}")
@@ -186,13 +203,20 @@ class TaskbarProgress:
             if hr < 0 or not factory.value:
                 return hr, c_void_p()
             # IClassFactory: QueryInterface=0, AddRef=1, Release=2, CreateInstance=3
-            ftable = cast(factory.value, POINTER(c_void_p))
+            ftable = cast(factory, POINTER(POINTER(c_void_p))).contents
+
+            def _faddr(index: int) -> int:
+                item = ftable[index]
+                if item is None:
+                    return 0
+                return item if isinstance(item, int) else int(item.value)
+
             create = WINFUNCTYPE(
                 c_int, c_void_p, c_void_p, POINTER(GUID), POINTER(c_void_p)
-            )(ftable[3])
+            )(_faddr(3))
             ptr = c_void_p()
             hr = create(factory, None, byref(IID_ITaskbarList3), byref(ptr))
-            release = WINFUNCTYPE(c_ulong, c_void_p)(ftable[2])
+            release = WINFUNCTYPE(c_ulong, c_void_p)(_faddr(2))
             release(factory)
             return hr, ptr
         except Exception as exc:
