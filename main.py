@@ -14,6 +14,7 @@ from app.core.settings import AppSettings  # noqa: E402
 from app.core.theme import apply_theme  # noqa: E402
 from app.ui.app_icon import app_icon  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
+from app.version import APP_VERSION  # noqa: E402
 
 
 def main() -> None:
@@ -23,6 +24,7 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setWindowIcon(app_icon())
     app.setApplicationName("CXVideoCutter")
+    app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName("CXVideoCutter")
     cleanup_old_logs(30)
     apply_theme(app, AppSettings().theme())

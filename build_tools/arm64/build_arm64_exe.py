@@ -25,6 +25,7 @@ DIST = ARM / "dist"
 WORK = ARM / "work"
 FFMPEG = ARM / "ffmpeg-install" / "bin" / "ffmpeg.exe"
 FFPROBE = ARM / "ffmpeg-install" / "bin" / "ffprobe.exe"
+VERSION_INFO = ROOT / "build_tools" / "windows" / "version_info.txt"
 
 
 def install_arm_bootloader() -> None:
@@ -141,7 +142,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CXVideoCutter-win-arm64',
+    name='CXVideoCutter-v1.0.0-win-arm64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -155,6 +156,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=[r"{icon}"],
+    version=r"{VERSION_INFO}",
 )
 '''
     SPEC.write_text(spec, encoding="utf-8")
@@ -210,7 +212,7 @@ def main() -> None:
     ]
     print("run:", " ".join(cmd))
     subprocess.run(cmd, cwd=str(ROOT), check=True)
-    output = DIST / "CXVideoCutter-win-arm64.exe"
+    output = DIST / "CXVideoCutter-v1.0.0-win-arm64.exe"
     validate_exe(output)
     print("output:", output)
 

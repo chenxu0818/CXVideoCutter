@@ -1,9 +1,9 @@
 name: Build and Release CXVideoCutter
 
 # 一次触发构建三端产物并发布 Release v1.0.0：
-#   - Windows x64          CXVideoCutter-win-x64.exe
-#   - Windows ARM64        CXVideoCutter-win-arm64.exe（交叉冻结，内嵌全 ARM64 二进制）
-#   - macOS Apple Silicon  CXVideoCutter.app -> CXVideoCutter-macos-arm64.zip
+#   - Windows x64          CXVideoCutter-v1.0.0-win-x64.exe
+#   - Windows ARM64        CXVideoCutter-v1.0.0-win-arm64.exe（交叉冻结，内嵌全 ARM64 二进制）
+#   - macOS Apple Silicon  CXVideoCutter.app -> CXVideoCutter-v1.0.0-macos-arm64.zip
 on:
   workflow_dispatch:
   push:
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
-          path: dist-win-x64/CXVideoCutter-win-x64.exe
+          path: dist-win-x64/CXVideoCutter-v1.0.0-win-x64.exe
           if-no-files-found: error
 
   windows-arm64:
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-arm64
-          path: build_tools/arm64/dist/CXVideoCutter-win-arm64.exe
+          path: build_tools/arm64/dist/CXVideoCutter-v1.0.0-win-arm64.exe
           if-no-files-found: error
 
   macos-arm64:
@@ -82,11 +82,11 @@ jobs:
       - name: Build .app bundle
         run: bash build_tools/macos/build_macos_app.sh
       - name: Zip app bundle
-        run: cd dist && zip -ry CXVideoCutter-macos-arm64.zip CXVideoCutter.app
+        run: cd dist && zip -ry CXVideoCutter-v1.0.0-macos-arm64.zip CXVideoCutter.app
       - uses: actions/upload-artifact@v4
         with:
           name: macos-arm64
-          path: dist/CXVideoCutter-macos-arm64.zip
+          path: dist/CXVideoCutter-v1.0.0-macos-arm64.zip
           if-no-files-found: error
 
   release:
@@ -99,6 +99,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Remove legacy release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in \
+            "CXVideoCutter-win-x64.exe" \
+            "CXVideoCutter-win-arm64.exe" \
+            "CXVideoCutter-macos-arm64.zip"; do
+            gh release delete-asset v1.0.0 "$asset" --yes || true
+          done
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -107,6 +117,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            artifacts/windows-x64/CXVideoCutter-win-x64.exe
-            artifacts/windows-arm64/CXVideoCutter-win-arm64.exe
-            artifacts/macos-arm64/CXVideoCutter-macos-arm64.zip
+            artifacts/windows-x64/CXVideoCutter-v1.0.0-win-x64.exe
+            artifacts/windows-arm64/CXVideoCutter-v1.0.0-win-arm64.exe
+            artifacts/macos-arm64/CXVideoCutter-v1.0.0-macos-arm64.zip

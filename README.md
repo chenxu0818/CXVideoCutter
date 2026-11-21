@@ -29,13 +29,13 @@
 
 ## 下载与安装
 
-从 [Releases](https://github.com/chenxu0818/CXVideoCutter/releases) 下载对应平台产物：
+当前版本：**v1.0.0**。从 [Releases](https://github.com/chenxu0818/CXVideoCutter/releases) 下载对应平台产物（文件名均带版本号）：
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
-| Windows x64 | `CXVideoCutter-win-x64.exe` | 适用于 64 位 Windows |
-| Windows ARM64 | `CXVideoCutter-win-arm64.exe` | 适用于 ARM64 Windows 设备 |
-| macOS Apple Silicon | `CXVideoCutter-macos-arm64.zip` | 解压得到 `CXVideoCutter.app` |
+| Windows x64 | `CXVideoCutter-v1.0.0-win-x64.exe` | 适用于 64 位 Windows |
+| Windows ARM64 | `CXVideoCutter-v1.0.0-win-arm64.exe` | 适用于 ARM64 Windows 设备 |
+| macOS Apple Silicon | `CXVideoCutter-v1.0.0-macos-arm64.zip` | 解压得到 `CXVideoCutter.app` |
 
 macOS 首次打开时，如被 Gatekeeper 拦截，可右键 `.app` 选择“打开”，或在“系统设置 → 隐私与安全性”中允许。发布包已做 ad-hoc 签名，面向他人分发时仍需按 Apple 要求公证。
 

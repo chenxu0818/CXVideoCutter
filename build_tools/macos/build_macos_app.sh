@@ -115,7 +115,10 @@ $PY -m PyInstaller "${PYI_ARGS[@]}" \
   "$ROOT/main.py"
 
 APP="$OUT/CXVideoCutter.app"
+# 写入版本号（Finder 显示与包属性均可见）
+plutil -replace CFBundleShortVersionString -string "1.0.0" "$APP/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "1.0.0" "$APP/Contents/Info.plist"
 # ad-hoc 签名整个 app（本机运行无需开发者证书；分发给他人需 notarization）
 codesign -s - --force --deep "$APP" 2>/dev/null || true
 echo "完成：$APP"
-echo "可将该 .app 压缩分发：cd \"$OUT\" && zip -ry CXVideoCutter-macos-arm64.zip CXVideoCutter.app"
+echo "可将该 .app 压缩分发：cd \"$OUT\" && zip -ry CXVideoCutter-v1.0.0-macos-arm64.zip CXVideoCutter.app"

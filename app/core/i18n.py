@@ -10,7 +10,12 @@ LANGUAGES = [
 
 # 简体为源语言，字典中未命中的文本原样显示
 TRANSLATIONS = {
-    "zh_CN": {},
+    "zh_CN": {
+        "关于文本": "CXVideoCutter\n\n基于 FFmpeg 的影片无损剪辑工具\n"
+                 "支持：多段选取、关键帧/1秒/30秒定位、无损剪辑与合并、\n"
+                 "轨道管理、章节、分辨率转换与多种封装格式。\n\n"
+                 "FFmpeg: ",
+    },
     "zh_TW": {
         "CXVideoCutter - 无损视频剪辑": "CXVideoCutter - 無損影片剪輯",
         "文件(&F)": "檔案(&F)",

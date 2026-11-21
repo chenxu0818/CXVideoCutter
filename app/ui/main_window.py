@@ -25,6 +25,7 @@ from ..core.models import Chapter, MediaSource, Segment
 from ..core.settings import AppSettings, default_output_dir
 from ..core.taskbar_progress import TaskbarProgress
 from ..core.theme import apply_theme
+from ..version import APP_VERSION_TAG
 from .app_icon import app_icon
 from .export_dialog import ExportDialog
 from .export_panel import ExportPanel
@@ -965,7 +966,14 @@ class MainWindow(QMainWindow):
         self.timeline.canvas.update()
 
     def _about(self) -> None:
-        show_about(self, tr("关于"), tr("关于文本") + probe_version())
+        about_text = tr("关于文本")
+        if about_text.startswith("CXVideoCutter"):
+            about_text = about_text.replace(
+                "CXVideoCutter", f"CXVideoCutter {APP_VERSION_TAG}", 1
+            )
+        else:
+            about_text = f"CXVideoCutter {APP_VERSION_TAG}\n\n" + about_text
+        show_about(self, tr("关于"), about_text + probe_version())
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self._taskbar.reset()

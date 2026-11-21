@@ -6,6 +6,7 @@ ROOT = os.path.abspath(os.path.join(SPECPATH, "..", ".."))
 ICON = os.path.join(ROOT, "app", "resources", "icon.ico")
 FFMPEG = os.path.join(ROOT, "build_tools", "ffmpeg-install", "bin", "ffmpeg.exe")
 FFPROBE = os.path.join(ROOT, "build_tools", "ffmpeg-install", "bin", "ffprobe.exe")
+VERSION_INFO = os.path.join(ROOT, "build_tools", "windows", "version_info.txt")
 
 a = Analysis(
     [os.path.join(ROOT, "main.py")],
@@ -67,7 +68,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="CXVideoCutter-win-x64",
+    name="CXVideoCutter-v1.0.0-win-x64",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -81,4 +82,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=[ICON],
+    version=VERSION_INFO,
 )
