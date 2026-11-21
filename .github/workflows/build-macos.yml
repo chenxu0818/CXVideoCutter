@@ -103,12 +103,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for asset in \
-            "CXVideoCutter-win-x64.exe" \
-            "CXVideoCutter-win-arm64.exe" \
-            "CXVideoCutter-macos-arm64.zip"; do
-            gh release delete-asset v1.0.0 "$asset" --yes || true
-          done
+          gh api "repos/${{ github.repository }}/releases/tags/v1.0.0" \
+            --jq '.assets[] | select(.name | startswith("CXVideoCutter-win-") or startswith("CXVideoCutter-macos-")) | .id' \
+          | while read -r id; do
+              [ -n "$id" ] && gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id"
+            done
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
