@@ -1,9 +1,12 @@
 """Windows 任务栏图标进度，不引入额外依赖。
 
 通过 COM 的 ITaskbarList3 调用 SetProgressValue / SetProgressState。
-关键点：CLSID_TaskbarList 由 explorer.exe 以 LocalServer 方式提供，
-必须使用 CLSCTX_ALL（而不是 CLSCTX_INPROC_SERVER）才能创建成功。
-非 Windows 或调用失败时自动降级为空操作，调用方无需判断平台。
+
+关键设计：
+1. 延迟初始化：必须拿到顶层窗口 HWND 后才创建 COM 对象，且可重试。
+2. 多路径创建：CoCreateInstance(CLSCTX_ALL) → explorerframe.dll → shell32.dll。
+3. 全链路诊断：每一步的 HRESULT、HWND、调用返回值都写入日志，便于定位。
+4. 非 Windows 或任何失败都自动降级为空操作，调用方无需判断平台。
 """
 
 from __future__ import annotations
@@ -26,7 +29,9 @@ except ImportError:  # 非 Windows
 def _hr_text(hr: int) -> str:
     return f"0x{hr & 0xFFFFFFFF:08X}"
 
-CLSCTX_ALL = 0x17  # INPROC | LOCAL | REMOTE | ENABLE_ACTIVATION
+
+CLSCTX_ALL = 0x17          # INPROC | INPROC_HANDLER | LOCAL | REMOTE
+COINIT_APARTMENTTHREADED = 0x2
 
 
 class GUID(Structure):
@@ -46,6 +51,10 @@ IID_ITaskbarList3 = GUID(
     0xEA1B63D1, 0x3B65, 0x43CF,
     (c_ubyte * 8)(0xBC, 0x2B, 0xD4, 0x7E, 0x4B, 0x9C, 0x3D, 0x8E),
 )
+IID_IClassFactory = GUID(
+    0x00000001, 0x0000, 0x0000,
+    (c_ubyte * 8)(0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46),
+)
 
 
 class TaskbarProgress:
@@ -56,131 +65,191 @@ class TaskbarProgress:
     TBPF_PAUSED = 8
 
     def __init__(self, hwnd: int = 0):
-        self.hwnd = int(hwnd or 0)
+        self.hwnd = 0
         self._tb: c_void_p | None = None
+        self._add_tab = None
         self._set_value = None
         self._set_state = None
         self._hr_init = None
-        self._tried = False
-        if sys.platform != "win32" or WINFUNCTYPE is None:
-            return
-        windll = getattr(ctypes, "windll", None)
-        if windll is None:
-            return
-        try:
-            ole32 = windll.ole32
-            # 用 c_int 接收 HRESULT，避免 ctypes.HRESULT 把失败码自动抛成异常
-            ole32.CoInitializeEx.argtypes = [c_void_p, c_ulong]
-            ole32.CoInitializeEx.restype = c_int
-            # COINIT_APARTMENTTHREADED；S_FALSE(已初始化) / RPC_E_CHANGED_MODE 均可忽略
-            ole32.CoInitializeEx(None, 2)
+        self._ready = False
+        self._path = ""
+        self._retries = 0
+        self._max_retries = 5
+        if hwnd:
+            self.set_hwnd(hwnd)
 
-            ole32.CoCreateInstance.argtypes = [
-                POINTER(GUID), c_void_p, c_ulong, POINTER(GUID), POINTER(c_void_p)
-            ]
-            ole32.CoCreateInstance.restype = c_int
-            ptr = c_void_p()
-            hr = ole32.CoCreateInstance(
-                byref(CLSID_TaskbarList), None, CLSCTX_ALL,
-                byref(IID_ITaskbarList3), byref(ptr),
-            )
-            self._tried = True
-            if hr < 0 or not ptr.value:
-                log_warn(f"任务栏进度：创建 TaskbarList 失败 hr={_hr_text(hr)}")
-                return
-            table = cast(ptr.value, POINTER(c_void_p))
-            self._tb = ptr
-            self._hr_init = WINFUNCTYPE(c_int, c_void_p)(table[3])
-            self._set_value = WINFUNCTYPE(
-                c_int, c_void_p, c_void_p, c_ulonglong, c_ulonglong
-            )(table[9])
-            self._set_state = WINFUNCTYPE(c_int, c_void_p, c_void_p, c_int)(table[10])
-            # ITaskbarList3::HrInit 必须调用，否则 SetProgress* 不生效
-            hr_init = self._hr_init(self._tb)
-            if hr_init < 0:
-                log_warn(f"任务栏进度：HrInit 失败 hr={_hr_text(hr_init)}")
-                self._tb = None
-                self._set_value = None
-                self._set_state = None
-            else:
-                log_info("任务栏进度：TaskbarList 初始化成功")
-        except Exception as exc:
-            self._tried = True
-            self._tb = None
-            self._set_value = None
-            self._set_state = None
-            log_warn(f"任务栏进度：初始化异常 {exc}")
-
+    # ------------------------------------------------------------------
+    # 初始化
+    # ------------------------------------------------------------------
     def set_hwnd(self, hwnd: int) -> None:
-        self.hwnd = int(hwnd or 0)
-        # 极端情况下构造时尚未拿到有效 HWND，此处补建 COM 对象
-        if self.hwnd and not self._tried:
-            self._init_now()
+        hwnd = int(hwnd or 0)
+        if not hwnd:
+            return
+        hwnd_changed = hwnd != self.hwnd
+        self.hwnd = hwnd
+        # 已就绪且窗口未变：无需重复创建 COM 对象
+        if self._ready and not hwnd_changed:
+            return
+        # 每次拿到（新的）HWND 都允许重建，避免构造期失败后永久失效
+        self._ready = False
+        self._tb = None
+        self._init_now()
 
     def _init_now(self) -> None:
         if sys.platform != "win32" or WINFUNCTYPE is None:
-            self._tried = True
+            log_warn("任务栏进度：非 Windows 平台，跳过")
             return
         windll = getattr(ctypes, "windll", None)
         if windll is None:
-            self._tried = True
+            log_warn("任务栏进度：ctypes.windll 不可用，跳过")
             return
-        self._tried = True
         try:
             ole32 = windll.ole32
             ole32.CoInitializeEx.argtypes = [c_void_p, c_ulong]
             ole32.CoInitializeEx.restype = c_int
-            ole32.CoInitializeEx(None, 2)
+            # Qt 可能已初始化 COM：S_FALSE / RPC_E_CHANGED_MODE 均可忽略
+            hr_co = ole32.CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+            log_info(f"任务栏进度：CoInitializeEx hr={_hr_text(hr_co)}")
+
             ole32.CoCreateInstance.argtypes = [
                 POINTER(GUID), c_void_p, c_ulong, POINTER(GUID), POINTER(c_void_p)
             ]
             ole32.CoCreateInstance.restype = c_int
+
             ptr = c_void_p()
             hr = ole32.CoCreateInstance(
                 byref(CLSID_TaskbarList), None, CLSCTX_ALL,
                 byref(IID_ITaskbarList3), byref(ptr),
             )
+            path = f"CoCreateInstance(CLSCTX_ALL) hr={_hr_text(hr)}"
+            log_info(f"任务栏进度：路径1 {path}")
+
+            # 路径2/3：注册表被过滤或类未注册时，直接从系统 DLL 取类工厂
             if hr < 0 or not ptr.value:
-                log_warn(f"任务栏进度：创建 TaskbarList 失败 hr={_hr_text(hr)}")
+                hr, ptr = self._create_via_dll(windll, "explorerframe.dll")
+                path = f"explorerframe.dll hr={_hr_text(hr)}"
+                log_info(f"任务栏进度：路径2 {path}")
+            if hr < 0 or not ptr.value:
+                hr, ptr = self._create_via_dll(windll, "shell32.dll")
+                path = f"shell32.dll hr={_hr_text(hr)}"
+                log_info(f"任务栏进度：路径3 {path}")
+
+            if hr < 0 or not ptr.value:
+                log_warn(f"任务栏进度：所有创建路径失败，最后 hr={_hr_text(hr)}")
                 return
+
             table = cast(ptr.value, POINTER(c_void_p))
             self._tb = ptr
+            # IUnknown: 0/1/2；ITaskbarList: HrInit=3, AddTab=4；
+            # ITaskbarList2: MarkFullscreenWindow=8；
+            # ITaskbarList3: SetProgressValue=9, SetProgressState=10
             self._hr_init = WINFUNCTYPE(c_int, c_void_p)(table[3])
+            self._add_tab = WINFUNCTYPE(c_int, c_void_p, c_void_p)(table[4])
             self._set_value = WINFUNCTYPE(
                 c_int, c_void_p, c_void_p, c_ulonglong, c_ulonglong
             )(table[9])
             self._set_state = WINFUNCTYPE(c_int, c_void_p, c_void_p, c_int)(table[10])
+
             hr_init = self._hr_init(self._tb)
+            log_info(f"任务栏进度：HrInit hr={_hr_text(hr_init)}")
             if hr_init < 0:
-                log_warn(f"任务栏进度：HrInit 失败 hr={_hr_text(hr_init)}")
-                self._tb = None
-                self._set_value = None
-                self._set_state = None
-            else:
-                log_info("任务栏进度：TaskbarList 初始化成功")
+                self._clear()
+                return
+
+            # AddTab 仅用于多标签窗口共享任务栏按钮，普通主窗口按官方示例
+            # HrInit 后即可直接 SetProgress*；这里只记录不阻断，避免副作用。
+            if self._add_tab is not None:
+                try:
+                    hr_tab = self._add_tab(self._tb, c_void_p(self.hwnd))
+                    log_info(f"任务栏进度：AddTab hwnd={self.hwnd} hr={_hr_text(hr_tab)}")
+                except Exception as exc:
+                    log_warn(f"任务栏进度：AddTab 异常 {exc!r}")
+
+            self._ready = True
+            self._path = path
+            log_info(f"任务栏进度：初始化成功（{path}），hwnd={self.hwnd}")
         except Exception as exc:
-            self._tb = None
-            self._set_value = None
-            self._set_state = None
-            log_warn(f"任务栏进度：初始化异常 {exc}")
+            log_warn(f"任务栏进度：初始化异常 {exc!r}")
+            self._clear()
+
+    def _create_via_dll(self, windll, dllname: str):
+        """绕过注册表，直接从系统 DLL 获取 IClassFactory 再创建 TaskbarList。"""
+        try:
+            dll = windll.LoadLibrary(dllname)
+            fn = dll.DllGetClassObject
+            fn.argtypes = [POINTER(GUID), POINTER(GUID), POINTER(c_void_p)]
+            fn.restype = c_int
+            factory = c_void_p()
+            hr = fn(
+                byref(CLSID_TaskbarList), byref(IID_IClassFactory), byref(factory)
+            )
+            if hr < 0 or not factory.value:
+                return hr, c_void_p()
+            # IClassFactory: QueryInterface=0, AddRef=1, Release=2, CreateInstance=3
+            ftable = cast(factory.value, POINTER(c_void_p))
+            create = WINFUNCTYPE(
+                c_int, c_void_p, c_void_p, POINTER(GUID), POINTER(c_void_p)
+            )(ftable[3])
+            ptr = c_void_p()
+            hr = create(factory, None, byref(IID_ITaskbarList3), byref(ptr))
+            release = WINFUNCTYPE(c_ulong, c_void_p)(ftable[2])
+            release(factory)
+            return hr, ptr
+        except Exception as exc:
+            log_warn(f"任务栏进度：{dllname} 类工厂异常 {exc!r}")
+            return -1, c_void_p()
+
+    def _clear(self) -> None:
+        self._tb = None
+        self._add_tab = None
+        self._set_value = None
+        self._set_state = None
+        self._hr_init = None
+        self._ready = False
+
+    # ------------------------------------------------------------------
+    # 进度操作
+    # ------------------------------------------------------------------
+    def _ensure_ready(self) -> bool:
+        """失败后在进度回调中做有限次重试，应对窗口/COM 尚未就绪的时序问题。"""
+        if self._ready:
+            return True
+        if self.hwnd and self._retries < self._max_retries:
+            self._retries += 1
+            self._init_now()
+        return self._ready
 
     def set_state(self, state: int) -> None:
-        if self._tb is None or not self.hwnd or self._set_state is None:
+        if not self._ensure_ready() or not self.hwnd or self._set_state is None:
             return
         try:
-            self._set_state(self._tb, c_void_p(self.hwnd), int(state))
-        except Exception:
-            pass
+            hr = self._set_state(self._tb, c_void_p(self.hwnd), int(state))
+            if hr < 0:
+                log_warn(f"任务栏进度：SetProgressState({state}) 失败 hr={_hr_text(hr)}")
+            else:
+                log_info(f"任务栏进度：SetProgressState({state}) OK")
+        except Exception as exc:
+            log_warn(f"任务栏进度：SetProgressState 异常 {exc!r}")
 
     def set_value(self, value: int) -> None:
-        if self._tb is None or not self.hwnd or self._set_value is None:
+        if not self._ensure_ready() or not self.hwnd or self._set_value is None:
             return
         value = max(0, min(100, int(value)))
         try:
-            self._set_value(self._tb, c_void_p(self.hwnd), value, 100)
-        except Exception:
-            pass
+            hr = self._set_value(self._tb, c_void_p(self.hwnd), value, 100)
+            if hr < 0:
+                log_warn(f"任务栏进度：SetProgressValue({value}) 失败 hr={_hr_text(hr)}")
+            elif value in (0, 50, 100):
+                log_info(f"任务栏进度：SetProgressValue({value}) OK")
+        except Exception as exc:
+            log_warn(f"任务栏进度：SetProgressValue 异常 {exc!r}")
 
     def reset(self) -> None:
+        if not self._ready:
+            return
         self.set_state(self.TBPF_NOPROGRESS)
-        self.set_value(0)
+        try:
+            if self._set_value is not None:
+                self._set_value(self._tb, c_void_p(self.hwnd), 0, 100)
+        except Exception:
+            pass
