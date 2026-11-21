@@ -60,15 +60,11 @@ class LogDialog(QDialog):
         layout = QVBoxLayout(self)
         self.table = QTableWidget(0, 3, self)
         self.table.setHorizontalHeaderLabels([tr("日期"), tr("大小"), tr("操作")])
-        self.table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
+        header = self.table.horizontalHeader()
+        # 三列等宽：关闭末列拉伸，全部使用 Stretch 平分配表宽度
+        header.setStretchLastSection(False)
+        for column in range(3):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.verticalHeader().setVisible(False)
