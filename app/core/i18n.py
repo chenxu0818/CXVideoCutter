@@ -15,7 +15,10 @@ TRANSLATIONS = {
                  "支持：多段选取、关键帧/1秒/30秒定位、无损剪辑与合并、\n"
                  "轨道管理、章节、分辨率转换与多种封装格式。\n\n"
                  "FFmpeg: ",
-        "界面缩放提示": "缩放更改后需重启程序才会完整生效。",
+        "界面缩放提示": "自动档按屏幕逻辑分辨率选择；手动档可精细调整，更改后立即生效。",
+        "手动": "手动",
+        "请拖入视频文件。": "请拖入视频文件。",
+        "拖入的文件不是视频，已忽略。": "拖入的文件不是视频，已忽略。",
     },
     "zh_TW": {
         "CXVideoCutter - 无损视频剪辑": "CXVideoCutter - 無損影片剪輯",
@@ -134,8 +137,11 @@ TRANSLATIONS = {
         "界面语言": "介面語言",
         "主题": "主題",
         "界面缩放": "介面縮放",
-        "界面缩放提示": "縮放變更後需重新啟動程式才會完整生效。",
+        "界面缩放提示": "自動檔依螢幕邏輯解析度選擇；手動檔可微調，變更後立即生效。",
         "自动": "自動",
+        "手动": "手動",
+        "请拖入视频文件。": "請拖入影片檔案。",
+        "拖入的文件不是视频，已忽略。": "拖入的檔案不是影片，已忽略。",
         "默认深色": "預設深色",
         "深空蓝": "深空藍",
         "霓虹紫": "霓虹紫",
@@ -187,8 +193,8 @@ TRANSLATIONS = {
         "静音": "靜音",
         "取消静音": "取消靜音",
         "音量": "音量",
-        "时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）":
-            "時間軸（按一下定位，拖曳至少 5 秒選取片段，Ctrl+滾輪縮放）",
+        "时间轴（单击定位，拖拽选择片段，Ctrl+滚轮或双指捏合缩放，双指滑动快进）":
+            "時間軸（按一下定位，拖曳選取片段，Ctrl+滾輪或雙指捏合縮放，雙指滑動快進）",
     },
     "en": {
         "CXVideoCutter - 无损视频剪辑": "CXVideoCutter - Lossless Video Cutter",
@@ -307,8 +313,11 @@ TRANSLATIONS = {
         "界面语言": "Language",
         "主题": "Theme",
         "界面缩放": "UI Scale",
-        "界面缩放提示": "Scale changes take full effect after restarting the app.",
+        "界面缩放提示": "Auto picks a scale from the screen resolution; Manual allows fine tuning. Changes apply immediately.",
         "自动": "Auto",
+        "手动": "Manual",
+        "请拖入视频文件。": "Please drag in a video file.",
+        "拖入的文件不是视频，已忽略。": "Dropped file is not a video and was ignored.",
         "默认深色": "Default Dark",
         "深空蓝": "Deep Ocean",
         "霓虹紫": "Neon Purple",
@@ -360,8 +369,8 @@ TRANSLATIONS = {
         "静音": "Mute",
         "取消静音": "Unmute",
         "音量": "Volume",
-        "时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）":
-            "Timeline (click to seek, drag at least 5s to select, Ctrl+wheel to zoom)",
+        "时间轴（单击定位，拖拽选择片段，Ctrl+滚轮或双指捏合缩放，双指滑动快进）":
+            "Timeline (click to seek, drag to select, pinch or Ctrl+wheel to zoom, two-finger swipe to skip)",
     },
 }
 

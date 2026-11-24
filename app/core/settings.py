@@ -76,13 +76,55 @@ class AppSettings:
         self._settings.setValue("allow_segment_overlap", bool(value))
         self._settings.sync()
 
+    def ui_scale_mode(self) -> str:
+        """界面缩放模式：auto（按屏幕分辨率自动）/ manual（手动百分比）。"""
+        raw = self._settings.value("ui_scale_mode", "", str) or ""
+        if raw in ("auto", "manual"):
+            return raw
+        # 兼容 v1.0.1 及之前的 ui_scale 字符串：auto 或 0.9/1.0/1.25/...
+        old = self._settings.value("ui_scale", "auto", str) or "auto"
+        return "auto" if old == "auto" else "manual"
+
+    def set_ui_scale_mode(self, mode: str) -> None:
+        self._settings.setValue("ui_scale_mode", "manual" if mode == "manual" else "auto")
+        self._settings.sync()
+
+    def ui_scale_percent(self) -> int:
+        """手动缩放百分比，范围 80~200。"""
+        raw = self._settings.value("ui_scale_percent", "", str) or ""
+        if not raw:
+            old = self._settings.value("ui_scale", "auto", str) or "auto"
+            if old == "auto":
+                return 100
+            try:
+                return int(round(float(old) * 100))
+            except (TypeError, ValueError):
+                return 100
+        try:
+            return max(80, min(200, int(raw)))
+        except (TypeError, ValueError):
+            return 100
+
+    def set_ui_scale_percent(self, value: int) -> None:
+        self._settings.setValue("ui_scale_percent", max(80, min(200, int(value))))
+        self._settings.sync()
+
     def ui_scale(self) -> str:
-        """界面缩放选择：auto / 0.9 / 1.0 / 1.1 / 1.25 / 1.5。"""
-        return self._settings.value("ui_scale", "auto", str) or "auto"
+        """兼容旧接口：返回 auto 或形如 '1.25' 的比例字符串。"""
+        if self.ui_scale_mode() == "auto":
+            return "auto"
+        return str(round(self.ui_scale_percent() / 100.0, 2))
 
     def set_ui_scale(self, value: str) -> None:
-        self._settings.setValue("ui_scale", value)
-        self._settings.sync()
+        """兼容旧接口：设置自动或固定比例。"""
+        if value == "auto":
+            self.set_ui_scale_mode("auto")
+            return
+        try:
+            self.set_ui_scale_percent(int(round(float(value) * 100)))
+            self.set_ui_scale_mode("manual")
+        except (TypeError, ValueError):
+            self.set_ui_scale_mode("auto")
 
     def window_geometry(self) -> str:
         """上次退出时的窗口几何，空字符串表示尚未保存。"""

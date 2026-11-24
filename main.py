@@ -33,22 +33,19 @@ def _enable_dpi_awareness() -> None:
 
 _enable_dpi_awareness()
 
-from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from app.core.logger import cleanup_old_logs  # noqa: E402
 from app.core.settings import AppSettings  # noqa: E402
 from app.core.theme import apply_theme  # noqa: E402
-from app.core.ui_scale import apply as apply_ui_scale  # noqa: E402
+from app.core.ui_scale import configure_high_dpi, init_metrics  # noqa: E402
 from app.ui.app_icon import app_icon  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
 from app.version import APP_VERSION  # noqa: E402
 
 
 def main() -> None:
-    QApplication.setHighDpiScaleFactorRoundingPolicy(
-        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-    )
+    configure_high_dpi()
     app = QApplication(sys.argv)
     app.setWindowIcon(app_icon())
     app.setApplicationName("CXVideoCutter")
@@ -56,8 +53,9 @@ def main() -> None:
     app.setOrganizationName("CXVideoCutter")
     cleanup_old_logs(30)
     settings = AppSettings()
-    apply_ui_scale(settings.ui_scale())
-    apply_theme(app, settings.theme())
+    ui_metrics = init_metrics(settings)
+    apply_theme(app, settings.theme(), ui_metrics)
+    ui_metrics.apply_font(app)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

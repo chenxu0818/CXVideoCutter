@@ -1,25 +1,24 @@
-"""设置对话框：保存目录与界面语言。"""
+"""设置对话框：保存目录、界面语言、主题与界面缩放。"""
 
 from __future__ import annotations
-
-import os
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from ..core.i18n import LANGUAGES, tr
 from ..core.theme import THEME_CHOICES
-from ..core.ui_scale import SCALE_CHOICES, ui_px
+from ..core.ui_scale import AUTO, MANUAL, ui_px
 from .app_icon import app_icon
 
 
 class SettingsDialog(QDialog):
     def __init__(
         self, output_dir: str, language: str, theme: str = "default",
-        allow_overlap: bool = True, ui_scale: str = "auto", parent=None,
+        allow_overlap: bool = True, scale_mode: str = AUTO, scale_percent: int = 100,
+        parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(tr("设置…"))
@@ -47,15 +46,38 @@ class SettingsDialog(QDialog):
             self.combo_theme.setCurrentIndex(index)
         form.addRow(self.label_theme, self.combo_theme)
 
+        # ---- 界面缩放：自动 / 手动百分比（参考 CXPurePlayer） ----
         self.label_scale = QLabel(tr("界面缩放"))
-        self.combo_scale = QComboBox()
-        for code, name in SCALE_CHOICES:
-            self.combo_scale.addItem(tr(name), code)
-        index = self.combo_scale.findData(ui_scale)
-        if index >= 0:
-            self.combo_scale.setCurrentIndex(index)
-        self.combo_scale.setToolTip(tr("界面缩放提示"))
-        form.addRow(self.label_scale, self.combo_scale)
+        scale_row = QWidget()
+        scale_layout = QHBoxLayout(scale_row)
+        scale_layout.setContentsMargins(0, 0, 0, 0)
+        scale_layout.setSpacing(ui_px(6))
+
+        self.combo_scale_mode = QComboBox()
+        self.combo_scale_mode.addItem(tr("自动"), AUTO)
+        self.combo_scale_mode.addItem(tr("手动"), MANUAL)
+        self.combo_scale_mode.setCurrentIndex(
+            1 if scale_mode == MANUAL else 0
+        )
+        self.combo_scale_mode.setToolTip(tr("界面缩放提示"))
+        scale_layout.addWidget(self.combo_scale_mode)
+
+        self.spin_scale = QSpinBox()
+        self.spin_scale.setRange(80, 200)
+        self.spin_scale.setSingleStep(10)
+        self.spin_scale.setSuffix("%")
+        self.spin_scale.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.spin_scale.setValue(int(scale_percent))
+        self.spin_scale.setFixedWidth(ui_px(88))
+        self.spin_scale.setEnabled(scale_mode == MANUAL)
+        self.combo_scale_mode.currentIndexChanged.connect(
+            lambda: self.spin_scale.setEnabled(
+                self.combo_scale_mode.currentData() == MANUAL
+            )
+        )
+        scale_layout.addWidget(self.spin_scale)
+        scale_layout.addStretch(1)
+        form.addRow(self.label_scale, scale_row)
 
         self.chk_allow_overlap = QCheckBox(tr("允许片段重叠"))
         self.chk_allow_overlap.setChecked(bool(allow_overlap))
@@ -74,7 +96,7 @@ class SettingsDialog(QDialog):
         form.addRow(self.label_dir, dir_widget)
         root.addLayout(form)
 
-        self.hint = QLabel(tr("更改语言后立即生效，保存目录将在下次导出时使用。"))
+        self.hint = QLabel(tr("更改语言与界面缩放后立即生效，保存目录将在下次导出时使用。"))
         self.hint.setProperty("muted", True)
         self.hint.setWordWrap(True)
         root.addWidget(self.hint)
@@ -89,7 +111,6 @@ class SettingsDialog(QDialog):
         self.btn_box.rejected.connect(self.reject)
         root.addWidget(self.btn_box)
 
-        # QDialogButtonBox 的标准按钮默认跟随 Qt 语言包，这里显式按界面语言设置文本
         self.btn_ok = self.btn_box.button(QDialogButtonBox.StandardButton.Ok)
         self.btn_cancel = self.btn_box.button(QDialogButtonBox.StandardButton.Cancel)
         self._retranslate_buttons()
@@ -105,16 +126,18 @@ class SettingsDialog(QDialog):
         self.edit_dir.setText(self.default_dir)
         self.combo_lang.setCurrentIndex(0)
         self.combo_theme.setCurrentIndex(0)
-        self.combo_scale.setCurrentIndex(0)
+        self.combo_scale_mode.setCurrentIndex(0)
+        self.spin_scale.setValue(100)
         self.chk_allow_overlap.setChecked(True)
 
-    def values(self) -> tuple[str, str, str, bool, str]:
+    def values(self) -> tuple[str, str, str, bool, str, int]:
         return (
             self.edit_dir.text().strip(),
             self.combo_lang.currentData(),
             self.combo_theme.currentData(),
             self.chk_allow_overlap.isChecked(),
-            self.combo_scale.currentData(),
+            self.combo_scale_mode.currentData(),
+            self.spin_scale.value(),
         )
 
     def _retranslate_buttons(self) -> None:
@@ -126,17 +149,17 @@ class SettingsDialog(QDialog):
         self.label_lang.setText(tr("界面语言"))
         self.label_theme.setText(tr("主题"))
         self.label_scale.setText(tr("界面缩放"))
-        self.combo_scale.setToolTip(tr("界面缩放提示"))
+        self.combo_scale_mode.setItemText(0, tr("自动"))
+        self.combo_scale_mode.setItemText(1, tr("手动"))
+        self.combo_scale_mode.setToolTip(tr("界面缩放提示"))
         self.chk_allow_overlap.setText(tr("允许片段重叠"))
         self.chk_allow_overlap.setToolTip(tr("关闭后，新片段不能与已有片段重复或重叠。"))
         self.label_dir.setText(tr("视频保存目录"))
         self.btn_browse.setText(tr("浏览…"))
-        self.hint.setText(tr("更改语言后立即生效，保存目录将在下次导出时使用。"))
+        self.hint.setText(tr("更改语言与界面缩放后立即生效，保存目录将在下次导出时使用。"))
         self.btn_reset.setText(tr("恢复默认"))
         self._retranslate_buttons()
         for i, (_code, name) in enumerate(LANGUAGES):
             self.combo_lang.setItemText(i, name)
         for i, (_code, name) in enumerate(THEME_CHOICES):
             self.combo_theme.setItemText(i, tr(name))
-        for i, (_code, name) in enumerate(SCALE_CHOICES):
-            self.combo_scale.setItemText(i, tr(name))

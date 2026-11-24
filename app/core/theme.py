@@ -204,6 +204,10 @@ def build_stylesheet(code: str | None = None) -> str:
     QCheckBox, QRadioButton {{ color: {p['text']}; }}
     QCheckBox::indicator, QRadioButton::indicator {{ width: 14px; height: 14px; border: 1px solid {p['border']}; border-radius: 3px; background: {p['input']}; }}
     QCheckBox::indicator:checked, QRadioButton::indicator:checked {{ background: {p['accent']}; border-color: {p['accent_hover']}; }}
+    /* QTreeWidget 的勾选指示器在 macOS 上必须显式指定样式，否则原生样式不绘制 */
+    QTreeWidget::indicator {{ width: 14px; height: 14px; border: 1px solid {p['border']}; border-radius: 3px; background: {p['input']}; }}
+    QTreeWidget::indicator:checked {{ background: {p['accent']}; border-color: {p['accent_hover']}; }}
+    QTreeWidget::indicator:unchecked:hover {{ border-color: {p['accent']}; }}
     QSlider::groove:horizontal {{ background: {p['border']}; height: 4px; border-radius: 2px; }}
     QSlider::handle:horizontal {{ background: {p['accent']}; width: 12px; margin: -4px 0; border-radius: 6px; }}
     QTreeWidget, QListWidget {{ background: {p['panel']}; border: 1px solid {p['border']}; border-radius: 5px; }}
@@ -236,8 +240,11 @@ def build_stylesheet(code: str | None = None) -> str:
     """
 
 
-def apply_theme(app, code: str) -> None:
-    """设置当前主题并应用到全局（主窗口与所有对话框）。"""
+def apply_theme(app, code: str, ui_metrics=None) -> None:
+    """设置当前主题并应用到全局（主窗口与所有对话框）。
+
+    ui_metrics 可选，传入时用其缩放系数生成样式表；不传则用全局 Metrics。
+    """
     set_theme(code)
     p = palette()
     # 音量条保持设计时的固定尺寸，不随界面缩放变大。
@@ -245,4 +252,6 @@ def apply_theme(app, code: str) -> None:
 QSlider#volumeSlider::groove:horizontal {{ background: {p['border']}; height: 4px; border-radius: 2px; }}
 QSlider#volumeSlider::handle:horizontal {{ background: {p['accent']}; width: 12px; margin: -4px 0; border-radius: 6px; }}
 """
+    # scale_stylesheet 读取 ui_scale 的全局 Metrics；ui_metrics 参数仅为
+    # 与 CXPurePlayer 风格的调用保持一致，真正的尺寸源是全局单例。
     app.setStyleSheet(scale_stylesheet(build_stylesheet(code), volume_fixed))

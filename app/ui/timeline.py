@@ -5,8 +5,10 @@ from __future__ import annotations
 import bisect
 from typing import List
 
-from PySide6.QtCore import Qt, QRectF, Signal
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen, QWheelEvent
+from PySide6.QtCore import QEvent, Qt, QRectF, Signal
+from PySide6.QtGui import (
+    QColor, QFont, QMouseEvent, QNativeGestureEvent, QPainter, QPen, QWheelEvent,
+)
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QVBoxLayout, QWidget
 
 from ..core.ui_scale import ui_px
@@ -24,6 +26,7 @@ class _Canvas(QWidget):
     seekRequested = Signal(float)
     segmentCreated = Signal(float, float)
     positionChanged = Signal(float)   # 鼠标当前位置（用于状态栏）
+    zoomChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -67,6 +70,37 @@ class _Canvas(QWidget):
         self.offset = max(0.0, min(anchor - ratio * self.visible,
                                    max(0.0, self.duration - self.visible)))
         self.update()
+        self.zoomChanged.emit()
+
+    def event(self, event: QEvent) -> bool:  # noqa: N802
+        """处理 macOS 触控板原生手势：捏合缩放、双指横向滑动快进/定位。"""
+        if event.type() == QEvent.Type.NativeGesture and self.duration > 0:
+            gesture = event.gestureType()
+            if gesture == Qt.NativeGestureType.ZoomNativeGesture:
+                # 捏合：value 为相对缩放量（例如 1.05 / 0.95）
+                factor = float(event.value())
+                if 0.5 < factor < 2.0:
+                    anchor = self.x_to_t(event.position().x())
+                    self.set_zoom(self.zoom * factor, anchor)
+                event.accept()
+                return True
+            if gesture in (
+                Qt.NativeGestureType.PanNativeGesture,
+                Qt.NativeGestureType.SwipeNativeGesture,
+            ):
+                delta = event.delta()
+                dx = delta.x() if hasattr(delta, "x") else 0.0
+                if abs(dx) < 0.01:
+                    dx = float(event.value()) * 20.0
+                if abs(dx) > 0.01:
+                    # 双指滑动：按当前视野比例平移，达到快进/快退效果
+                    seconds = dx / max(1, self.width()) * self.visible * 2.0
+                    anchor = self.x_to_t(event.position().x())
+                    target = max(0.0, min(self.duration, anchor + seconds))
+                    self.seekRequested.emit(target)
+                event.accept()
+                return True
+        return super().event(event)
 
     # ------------------------------------------------------------------
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -80,9 +114,9 @@ class _Canvas(QWidget):
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, tr("打开视频后显示时间轴"))
             return
 
-        ruler_h = 24
-        track_y = ruler_h + 6
-        track_h = h - track_y - 8
+        ruler_h = ui_px(24)
+        track_y = ruler_h + ui_px(6)
+        track_h = h - track_y - ui_px(8)
 
         # 轨道底
         painter.fillRect(QRectF(0, track_y, w, track_h), QColor(p["panel_alt"]))
@@ -95,24 +129,24 @@ class _Canvas(QWidget):
                 break
         first = int(self.offset / step) * step
         t = first
-        painter.setFont(QFont("Segoe UI", 8))
+        painter.setFont(QFont("Segoe UI", ui_px(8)))
         while t <= self.offset + self.visible + step:
             x = self.t_to_x(t)
             if -2 <= x <= w + 2:
-                painter.setPen(QPen(QColor(p["border"]), 1))
-                painter.drawLine(int(x), ruler_h - 6, int(x), ruler_h)
+                painter.setPen(QPen(QColor(p["border"]), ui_px(1)))
+                painter.drawLine(int(x), ruler_h - ui_px(6), int(x), ruler_h)
                 painter.setPen(QColor(p["muted"]))
                 label = format_time(t, milliseconds=False)
-                painter.drawText(int(x) + 3, 2, 90, ruler_h - 6,
+                painter.drawText(int(x) + ui_px(3), 2, ui_px(90), ruler_h - ui_px(6),
                                  Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, label)
             t += step
 
         # 关键帧
         idx = bisect.bisect_left(self.keyframes, self.offset)
-        painter.setPen(QPen(QColor(p["marker"]), 1))
+        painter.setPen(QPen(QColor(p["marker"]), ui_px(1)))
         while idx < len(self.keyframes) and self.keyframes[idx] <= self.offset + self.visible:
             x = self.t_to_x(self.keyframes[idx])
-            painter.drawLine(int(x), track_y + 2, int(x), track_y + 7)
+            painter.drawLine(int(x), track_y + ui_px(2), int(x), track_y + ui_px(7))
             idx += 1
 
         # 片段
@@ -123,12 +157,12 @@ class _Canvas(QWidget):
             if x2 < 0 or x1 > w:
                 continue
             color = QColor(colors[i % len(colors)])
-            painter.fillRect(QRectF(x1, track_y + 10, max(2, x2 - x1), track_h - 20), color)
+            painter.fillRect(QRectF(x1, track_y + ui_px(10), max(ui_px(2), x2 - x1), track_h - ui_px(20)), color)
             painter.setPen(QColor(p["text_soft"]))
-            painter.drawRect(QRectF(x1, track_y + 10, max(2, x2 - x1), track_h - 20))
+            painter.drawRect(QRectF(x1, track_y + ui_px(10), max(ui_px(2), x2 - x1), track_h - ui_px(20)))
             if x2 - x1 > 34:
                 painter.setPen(QColor(p["text_strong"]))
-                painter.drawText(QRectF(x1 + 4, track_y + 10, x2 - x1 - 8, track_h - 20),
+                painter.drawText(QRectF(x1 + ui_px(4), track_y + ui_px(10), x2 - x1 - ui_px(8), track_h - ui_px(20)),
                                  Qt.AlignmentFlag.AlignCenter, f"{tr('片段 ')}{i + 1}")
 
         # 入点 / 出点
@@ -136,24 +170,24 @@ class _Canvas(QWidget):
             if t <= 0:
                 continue
             x = self.t_to_x(t)
-            painter.setPen(QPen(QColor(color), 2))
+            painter.setPen(QPen(QColor(color), ui_px(2)))
             painter.drawLine(int(x), track_y, int(x), track_y + track_h)
             painter.setPen(QColor(color))
-            painter.drawText(int(x) + 2, track_y + 1, 14, 12, Qt.AlignmentFlag.AlignLeft, label)
+            painter.drawText(int(x) + ui_px(2), track_y + 1, ui_px(14), ui_px(12), Qt.AlignmentFlag.AlignLeft, label)
 
         # 拖拽预览
         if self._drag_start is not None:
             x1, x2 = sorted((self.t_to_x(self._drag_start), self.t_to_x(self._drag_end)))
             fill = QColor(p["accent"])
             fill.setAlpha(90)
-            painter.fillRect(QRectF(x1, track_y + 2, max(1, x2 - x1), track_h - 4), fill)
-            painter.setPen(QPen(QColor(p["accent"]), 1))
-            painter.drawRect(QRectF(x1, track_y + 2, max(1, x2 - x1), track_h - 4))
+            painter.fillRect(QRectF(x1, track_y + ui_px(2), max(ui_px(1), x2 - x1), track_h - ui_px(4)), fill)
+            painter.setPen(QPen(QColor(p["accent"]), ui_px(1)))
+            painter.drawRect(QRectF(x1, track_y + ui_px(2), max(ui_px(1), x2 - x1), track_h - ui_px(4)))
 
         # 播放头
         px = self.t_to_x(self.playhead)
-        painter.setPen(QPen(QColor(p["playhead"]), 2))
-        painter.drawLine(int(px), ruler_h - 8, int(px), track_y + track_h)
+        painter.setPen(QPen(QColor(p["playhead"]), ui_px(2)))
+        painter.drawLine(int(px), ruler_h - ui_px(8), int(px), track_y + track_h)
 
     # ------------------------------------------------------------------
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
@@ -213,6 +247,7 @@ class Timeline(QWidget):
         self.canvas.seekRequested.connect(self.seekRequested.emit)
         self.canvas.segmentCreated.connect(self.segmentCreated.emit)
         self.canvas.positionChanged.connect(self.positionChanged.emit)
+        self.canvas.zoomChanged.connect(self._sync_scroll)
         self.scroll.valueChanged.connect(self._on_scroll)
 
         self._updating = False

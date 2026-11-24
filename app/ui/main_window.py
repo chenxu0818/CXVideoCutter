@@ -7,13 +7,13 @@ import tempfile
 from fractions import Fraction
 from typing import List
 
-from PySide6.QtCore import QRect, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
+from PySide6.QtCore import QEvent, QRect, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QPushButton, QSizePolicy, QSlider, QSplitter,
+    QMainWindow, QPushButton, QSizePolicy, QSplitter,
     QStackedWidget, QToolBar, QVBoxLayout, QWidget,
 )
 
@@ -31,6 +31,7 @@ from .app_icon import app_icon
 from .export_dialog import ExportDialog
 from .export_panel import ExportPanel
 from .filmstrip import FilmstripLoader, FilmstripWidget
+from .gesture_slider import GestureSlider
 from .helpers import FrameView, KeyframeLoader, PreviewFrameLoader, ThumbnailLoader, TimeEdit
 from .log_dialog import LogDialog
 from .msgbox import ask_yes_no, show_about, show_info, show_warning
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(tr("CXVideoCutter - 无损视频剪辑"))
         self.setWindowIcon(app_icon())
+        self.setAcceptDrops(True)
         self.setMinimumSize(ui_px(1100), ui_px(700))
         self._restore_window_geometry()
 
@@ -237,7 +239,7 @@ class MainWindow(QMainWindow):
         self.menu_file = self.menuBar().addMenu(tr("文件(&F)"))
         self.act_open = QAction(tr("打开视频…"), self)
         self.act_open.setShortcut(QKeySequence("Ctrl+O"))
-        self.act_open.triggered.connect(self.open_video)
+        self.act_open.triggered.connect(lambda: self.open_video())
         self.menu_file.addAction(self.act_open)
         self.act_audio = QAction(tr("添加外部音轨…"), self)
         self.act_audio.triggered.connect(lambda: self.add_external("audio"))
@@ -279,7 +281,7 @@ class MainWindow(QMainWindow):
         self.toolbar = toolbar
         self.addToolBar(toolbar)
         self.btn_open = QPushButton(tr("打开视频"))
-        self.btn_open.clicked.connect(self.open_video)
+        self.btn_open.clicked.connect(lambda: self.open_video())
         toolbar.addWidget(self.btn_open)
         self.file_label = QLabel(tr("未打开视频"))
         self.file_label.setProperty("muted", True)
@@ -301,6 +303,7 @@ class MainWindow(QMainWindow):
 
         self.preview = QFrame()
         self.preview.setObjectName("preview")
+        self.preview.installEventFilter(self)
         preview_layout = QVBoxLayout(self.preview)
         preview_layout.setContentsMargins(0, 0, 0, 0)
         self.preview_stack = QStackedWidget()
@@ -334,17 +337,18 @@ class MainWindow(QMainWindow):
         self.btn_play.setFixedWidth(ui_px(84))
         self.btn_stop = QPushButton(tr("■ 停止"))
         self.btn_stop.setFixedWidth(ui_px(70))
-        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider = GestureSlider(Qt.Orientation.Horizontal)
         self.time_label = QLabel("00:00:00.000 / 00:00:00.000")
         self.time_label.setMinimumWidth(ui_px(230))
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.btn_mute = QPushButton(tr("静音"))
         self.btn_mute.setCheckable(True)
         self.btn_mute.setFixedWidth(ui_px(48))
-        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider = GestureSlider(Qt.Orientation.Horizontal)
         self.volume_slider.setObjectName("volumeSlider")
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(80)
+        self.volume_slider.gesture_unit = 0.5
         self.volume_slider.setFixedWidth(84)
         self.volume_slider.setToolTip(tr("音量"))
         play_row.addWidget(self.btn_play)
@@ -422,7 +426,7 @@ class MainWindow(QMainWindow):
 
         # 时间轴
         self.timeline.setToolTip(
-            tr("时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）")
+            tr("时间轴（单击定位，拖拽选择片段，Ctrl+滚轮或双指捏合缩放，双指滑动快进）")
         )
         self.timeline.seekRequested.connect(self.seek)
         self.timeline.segmentCreated.connect(self.add_segment)
@@ -514,6 +518,7 @@ class MainWindow(QMainWindow):
         self.btn_mute.clicked.connect(self._toggle_mute)
         self.volume_slider.valueChanged.connect(self._on_volume_changed)
         self.position_slider.sliderMoved.connect(lambda v: self.seek(v / 1000.0))
+        self.position_slider.userValueChanged.connect(lambda v: self.seek(v / 1000.0))
         self.segment_panel.removeRequested.connect(self.remove_segment)
         self.segment_panel.locateRequested.connect(self._locate_segment)
         self.track_panel.addExternalRequested.connect(self.add_external)
@@ -525,14 +530,88 @@ class MainWindow(QMainWindow):
         self.export_panel.cancelRequested.connect(self.cancel_export)
 
     # ------------------------------------------------------------------
+    # 触控板手势（预览区左右滑动快进、捏合缩放时间轴）
+    # ------------------------------------------------------------------
+    def eventFilter(self, obj, event):  # noqa: N802
+        if (obj is self.preview and event.type() == QEvent.Type.NativeGesture
+                and self.sources):
+            kind = event.gestureType()
+            if kind in (
+                Qt.NativeGestureType.PanNativeGesture,
+                Qt.NativeGestureType.SwipeNativeGesture,
+            ):
+                delta = event.delta()
+                dx = delta.x() if hasattr(delta, "x") else 0.0
+                if abs(dx) < 0.01:
+                    dx = float(event.value()) * 20.0
+                if abs(dx) > 0.01:
+                    step = max(1.0, self.sources[0].duration * 0.01)
+                    self.seek(self.current_time + (dx / 20.0) * step)
+                event.accept()
+                return True
+            if kind == Qt.NativeGestureType.ZoomNativeGesture:
+                factor = float(event.value())
+                if 0.5 < factor < 2.0:
+                    self.timeline.canvas.set_zoom(self.timeline.canvas.zoom * factor)
+                event.accept()
+                return True
+        return super().eventFilter(obj, event)
+
+    # ------------------------------------------------------------------
+    # 拖放打开文件
+    # ------------------------------------------------------------------
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        urls = event.mimeData().urls()
+        if not urls:
+            super().dropEvent(event)
+            return
+        event.acceptProposedAction()
+        paths = [u.toLocalFile() for u in urls if u.isLocalFile() and os.path.isfile(u.toLocalFile())]
+        if not paths:
+            return
+        # 第一个视频作为主视频；其余音频/字幕作为外部轨道添加
+        video = next((p for p in paths if p.lower().endswith(self.VIDEO_EXTENSIONS)), None)
+        if video:
+            self.open_video(video)
+        elif self.sources:
+            show_info(self, tr("提示"), tr("拖入的文件不是视频，已忽略。"))
+        else:
+            show_info(self, tr("提示"), tr("请拖入视频文件。"))
+            return
+        for path in paths:
+            if path == video:
+                continue
+            if path.lower().endswith(self.AUDIO_EXTENSIONS):
+                self.add_external_path("audio", path)
+            elif path.lower().endswith(self.SUBTITLE_EXTENSIONS):
+                self.add_external_path("subtitle", path)
+
+    # ------------------------------------------------------------------
     # 媒体打开与播放
     # ------------------------------------------------------------------
-    def open_video(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, tr("打开视频…"), "",
-            f"{tr('视频文件 (*.mp4 *.mkv *.mov *.avi *.ts *.flv *.webm *.m4v)')};;"
-            f"{tr('所有文件 (*.*)')}",
-        )
+    VIDEO_EXTENSIONS = (".mp4", ".mkv", ".mov", ".avi", ".ts", ".flv", ".webm", ".m4v")
+    AUDIO_EXTENSIONS = (".mp3", ".aac", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".wma")
+    SUBTITLE_EXTENSIONS = (".srt", ".ass", ".ssa", ".vtt")
+
+    def open_video(self, path: str | None = None) -> None:
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, tr("打开视频…"), "",
+                f"{tr('视频文件 (*.mp4 *.mkv *.mov *.avi *.ts *.flv *.webm *.m4v)')};;"
+                f"{tr('所有文件 (*.*)')}",
+            )
         if not path:
             return
         log_info(f"打开视频: {path}")
@@ -563,6 +642,8 @@ class MainWindow(QMainWindow):
         self.timeline.setMedia(duration, [])
         self.timeline.setInOut(self.in_point, self.out_point)
         self.position_slider.setRange(0, int(duration * 1000))
+        # 手势每像素约移动 0.5% 时长，保证长视频也能明显快进
+        self.position_slider.gesture_unit = max(100, int(duration * 1000 / 200))
         self.edit_in.setSeconds(0)
         self.edit_out.setSeconds(self.out_point)
         self.frame_view.clear()
@@ -637,7 +718,7 @@ class MainWindow(QMainWindow):
 
     def _on_volume_changed(self, value: int) -> None:
         self.audio_output.setVolume(max(0.0, min(1.0, value / 100.0)))
-        if value > 0 and self.audio_output.muted():
+        if value > 0 and self.audio_output.isMuted():
             self.audio_output.setMuted(False)
             self.btn_mute.setChecked(False)
             self.btn_mute.setText(tr("静音"))
@@ -785,15 +866,19 @@ class MainWindow(QMainWindow):
         all_files = tr("所有文件 (*.*)")
         if kind == "audio":
             filt = f"{tr('音频文件 (*.mp3 *.aac *.m4a *.flac *.wav *.ogg *.opus *.wma)')};;{all_files}"
-            wanted = "audio"
         else:
             filt = f"{tr('字幕文件 (*.srt *.ass *.ssa *.vtt)')};;{all_files}"
-            wanted = "subtitle"
         path, _ = QFileDialog.getOpenFileName(
             self, tr("添加外部音轨…") if kind == "audio" else tr("添加外部字幕…"), "", filt
         )
-        if not path:
+        if path:
+            self.add_external_path(kind, path)
+
+    def add_external_path(self, kind: str, path: str) -> None:
+        if not self.sources:
+            show_info(self, tr("提示"), tr("请先打开主视频"))
             return
+        wanted = "audio" if kind == "audio" else "subtitle"
         try:
             source = probe_media(path, len(self.sources))
         except Exception as exc:
@@ -857,14 +942,16 @@ class MainWindow(QMainWindow):
     # 设置与导出
     # ------------------------------------------------------------------
     def open_settings(self) -> None:
-        old_ui_scale = self.app_settings.ui_scale()
+        old_mode = self.app_settings.ui_scale_mode()
+        old_percent = self.app_settings.ui_scale_percent()
         dialog = SettingsDialog(
             self.app_settings.output_dir(), self.app_settings.language(),
             self.app_settings.theme(), self.app_settings.allow_segment_overlap(),
-            self.app_settings.ui_scale(), self,
+            old_mode, old_percent, self,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            output_dir, language, theme, allow_overlap, ui_scale = dialog.values()
+            (output_dir, language, theme, allow_overlap,
+             scale_mode, scale_percent) = dialog.values()
             if not output_dir:
                 output_dir = default_output_dir()
             os.makedirs(output_dir, exist_ok=True)
@@ -872,16 +959,41 @@ class MainWindow(QMainWindow):
             self.app_settings.set_language(language)
             self.app_settings.set_theme(theme)
             self.app_settings.set_allow_segment_overlap(allow_overlap)
-            self.app_settings.set_ui_scale(ui_scale)
+            self.app_settings.set_ui_scale_mode(scale_mode)
+            self.app_settings.set_ui_scale_percent(scale_percent)
             set_language(language)
-            apply_theme(QApplication.instance(), theme)
+            self._apply_appearance(theme, scale_mode, scale_percent,
+                                   old_mode, old_percent)
             self.export_panel.setOutputDir(output_dir)
             self.retranslate()
             self.timeline.canvas.update()
             message = tr("设置已保存")
-            if ui_scale != old_ui_scale:
+            if (scale_mode, scale_percent) != (old_mode, old_percent):
                 message += "　" + tr("界面缩放提示")
             self.statusBar().showMessage(message)
+
+    def _apply_appearance(self, theme: str, scale_mode: str, scale_percent: int,
+                          old_mode: str, old_percent: int) -> None:
+        """缩放/主题变化后：重算 Metrics、重设字体与样式、等比调整已有控件与窗口。"""
+        from ..core.ui_scale import metrics as get_metrics, rescale_widget_tree
+
+        m = get_metrics()
+        if m is None:
+            apply_theme(QApplication.instance(), theme)
+            return
+        old_scale = (old_percent / 100.0) if old_mode == "manual" else m.scale
+        new_scale = m.recompute()
+        apply_theme(QApplication.instance(), theme, m)
+        m.apply_font(QApplication.instance())
+        rescale_widget_tree(self, new_scale / max(old_scale, 0.01))
+        if not self.isMaximized():
+            ratio = new_scale / max(old_scale, 0.01)
+            self.resize(
+                max(self.minimumWidth(), min(self.width() * ratio,
+                                             QGuiApplication.primaryScreen().availableGeometry().width())),
+                max(self.minimumHeight(), min(self.height() * ratio,
+                                              QGuiApplication.primaryScreen().availableGeometry().height())),
+            )
 
     def open_logs(self) -> None:
         cleanup_old_logs(30)
@@ -998,7 +1110,7 @@ class MainWindow(QMainWindow):
         self.btn_set_out.setText(tr("设为终点 (O)"))
         self.btn_add_seg.setText(tr("+ 添加片段"))
         self.timeline.setToolTip(
-            tr("时间轴（单击定位，拖拽至少 5 秒选择片段，Ctrl+滚轮缩放）")
+            tr("时间轴（单击定位，拖拽选择片段，Ctrl+滚轮或双指捏合缩放，双指滑动快进）")
         )
         self.btn_zoom_in.setText(tr("放大 +"))
         self.btn_zoom_out.setText(tr("缩小 −"))

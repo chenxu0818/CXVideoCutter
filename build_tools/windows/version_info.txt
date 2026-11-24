@@ -1,5 +1,5 @@
 # UTF-8
-# Windows EXE version resource for CXVideoCutter v1.0.1.
+# Windows EXE version resource for CXVideoCutter v1.0.2.
 VSVersionInfo(
   ffi=FixedFileInfo(
     filevers=(1, 0, 0, 0),
@@ -16,12 +16,12 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'CXVideoCutter'),
         StringStruct('FileDescription', 'CXVideoCutter - Lossless Video Cutter'),
-        StringStruct('FileVersion', '1.0.1.0'),
+        StringStruct('FileVersion', '1.0.2.0'),
         StringStruct('InternalName', 'CXVideoCutter'),
         StringStruct('LegalCopyright', 'GPL-3.0-or-later'),
         StringStruct('OriginalFilename', 'CXVideoCutter.exe'),
         StringStruct('ProductName', 'CXVideoCutter'),
-        StringStruct('ProductVersion', '1.0.1'),
+        StringStruct('ProductVersion', '1.0.2'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

@@ -86,7 +86,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CXVideoCutter-v1.0.1-win-arm64',
+    name='CXVideoCutter-v1.0.2-win-arm64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

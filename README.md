@@ -19,7 +19,9 @@
 - 容器格式：保持原视频格式，或指定 MKV / MP4。
 - 轨道管理：展示主视频自带的视频、音频、字幕、附件轨道，可勾选是否参与导出；支持添加外部音轨/字幕。
 - 章节管理：按时间点添加章节，导出为 FFmetadata；合并时会自动重映射章节时间。
-- 分辨率自适应：显式声明 Windows DPI 感知；高分辨率但系统未缩放时自动补偿，设置里还可选择 90%–150% 界面缩放；窗口初始尺寸随屏幕自适应并记住上次位置，音量条保持固定大小不受缩放影响。
+- 拖入打开：把视频文件直接拖到窗口即可打开；同时拖入的音频/字幕会自动添加为外部轨道。
+- 触控板手势：Mac 上双指捏合缩放时间轴、双指左右滑动快进/定位；进度条与音量条支持双指滑动调节。
+- 分辨率自适应：显式声明 DPI 感知并统一走 Metrics 尺寸源；自动档按屏幕逻辑分辨率较短边分档，手动档可在 80%–200% 精细调整，缩放后立即生效、窗口等比调整；音量条保持固定大小不受缩放影响。
 - 多语言：简体中文、繁体中文、English，切换后立即生效。
 - 多主题：默认深色、深空蓝、霓虹紫、极光绿、赛博橙、科技蓝、星空科技。
 - 设置持久化：输出目录、语言、主题、是否允许片段重叠保存在本地 `settings.ini`。
@@ -30,13 +32,13 @@
 
 ## 下载与安装
 
-当前版本：**v1.0.1**。从 [Releases](https://github.com/chenxu0818/CXVideoCutter/releases) 下载对应平台产物（文件名均带版本号）：
+当前版本：**v1.0.2**。从 [Releases](https://github.com/chenxu0818/CXVideoCutter/releases) 下载对应平台产物（文件名均带版本号）：
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
-| Windows x64 | `CXVideoCutter-v1.0.1-win-x64.exe` | 适用于 64 位 Windows |
-| Windows ARM64 | `CXVideoCutter-v1.0.1-win-arm64.exe` | 适用于 ARM64 Windows 设备 |
-| macOS Apple Silicon | `CXVideoCutter-v1.0.1-macos-arm64.zip` | 解压得到 `CXVideoCutter.app` |
+| Windows x64 | `CXVideoCutter-v1.0.2-win-x64.exe` | 适用于 64 位 Windows |
+| Windows ARM64 | `CXVideoCutter-v1.0.2-win-arm64.exe` | 适用于 ARM64 Windows 设备 |
+| macOS Apple Silicon | `CXVideoCutter-v1.0.2-macos-arm64.zip` | 解压得到 `CXVideoCutter.app` |
 
 macOS 首次打开时，如被 Gatekeeper 拦截，可右键 `.app` 选择“打开”，或在“系统设置 → 隐私与安全性”中允许。发布包已做 ad-hoc 签名，面向他人分发时仍需按 Apple 要求公证。
 
@@ -52,7 +54,8 @@ macOS 首次打开时，如被 Gatekeeper 拦截，可右键 `.app` 选择“打
 
 ### 选段与时间轴
 
-- 时间轴支持单击定位、拖拽选择片段（至少 5 秒）、`Ctrl + 滚轮` 缩放。
+- 时间轴支持单击定位、拖拽选择片段（至少 5 秒）、`Ctrl + 滚轮` 缩放；触控板双指捏合也可缩放，双指左右滑动可快进/定位。
+- 视频文件可直接拖入窗口打开；进度条和音量条支持触控板双指滑动调节。
 - 右侧“已选片段”显示首帧缩略图、起止时间、时长，可重新定位或删除。
 - 设置中可关闭“允许片段重叠”，避免重复或交叠添加同一时间段。
 

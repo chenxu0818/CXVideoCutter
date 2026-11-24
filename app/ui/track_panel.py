@@ -56,8 +56,9 @@ class TrackPanel(QWidget):
         self.tree.setHeaderLabels([tr("选择"), tr("轨道（勾选表示导出该轨道）")])
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tree.setColumnWidth(0, 46)
-        self.tree.setIndentation(12)
+        # 选择列只放勾选框，不显示文字（macOS 上文字会挤压指示器导致看不到）
+        self.tree.setColumnWidth(0, ui_px(52))
+        self.tree.setIndentation(ui_px(10))
         self.tree.setRootIsDecorated(True)
         self.tree.itemChanged.connect(self._on_toggle)
         root.addWidget(self.tree, 3)
@@ -106,8 +107,8 @@ class TrackPanel(QWidget):
         self.tree.clear()
         for src in self.sources:
             prefix = tr("主视频：") if src.input_index == 0 else tr("外部：")
-            src_item = QTreeWidgetItem([prefix + os.path.basename(src.path), ""])
-            src_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            src_item = QTreeWidgetItem(["", prefix + os.path.basename(src.path)])
+            src_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             for stream in src.streams:
                 item = QTreeWidgetItem()
                 item.setText(1, stream.label())
