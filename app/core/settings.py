@@ -75,3 +75,19 @@ class AppSettings:
     def set_allow_segment_overlap(self, value: bool) -> None:
         self._settings.setValue("allow_segment_overlap", bool(value))
         self._settings.sync()
+
+    def ui_scale(self) -> str:
+        """界面缩放选择：auto / 0.9 / 1.0 / 1.1 / 1.25 / 1.5。"""
+        return self._settings.value("ui_scale", "auto", str) or "auto"
+
+    def set_ui_scale(self, value: str) -> None:
+        self._settings.setValue("ui_scale", value)
+        self._settings.sync()
+
+    def window_geometry(self) -> str:
+        """上次退出时的窗口几何，空字符串表示尚未保存。"""
+        return self._settings.value("window_geometry", "", str) or ""
+
+    def set_window_geometry(self, value: str) -> None:
+        self._settings.setValue("window_geometry", value)
+        self._settings.sync()

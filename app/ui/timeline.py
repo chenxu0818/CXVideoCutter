@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QVBoxLayout, QWidget
 
+from ..core.ui_scale import ui_px
 from ..core.ffmpeg import format_time
 from ..core.i18n import tr
 from ..core.models import Segment
@@ -36,7 +37,7 @@ class _Canvas(QWidget):
         self.offset = 0.0           # 左侧对应的秒数
         self._drag_start: float | None = None
         self._drag_end = 0.0
-        self.setFixedHeight(76)
+        self.setFixedHeight(ui_px(76))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 

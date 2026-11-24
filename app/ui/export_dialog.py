@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout
 
+from ..core.ui_scale import ui_px
 from ..core.i18n import tr
 from .app_icon import app_icon
 
@@ -15,14 +16,14 @@ class ExportDialog(QDialog):
         self._busy = False
         self.setWindowTitle(tr("导出设置"))
         self.setWindowIcon(app_icon())
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(ui_px(500))
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
         root.addWidget(panel)
 
         # 关闭按钮居中放置
         self.close_button = QPushButton(tr("关闭"))
-        self.close_button.setFixedWidth(100)
+        self.close_button.setFixedWidth(ui_px(100))
         self.close_button.clicked.connect(self.hide)
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)

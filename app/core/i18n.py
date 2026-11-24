@@ -15,6 +15,7 @@ TRANSLATIONS = {
                  "支持：多段选取、关键帧/1秒/30秒定位、无损剪辑与合并、\n"
                  "轨道管理、章节、分辨率转换与多种封装格式。\n\n"
                  "FFmpeg: ",
+        "界面缩放提示": "缩放更改后需重启程序才会完整生效。",
     },
     "zh_TW": {
         "CXVideoCutter - 无损视频剪辑": "CXVideoCutter - 無損影片剪輯",
@@ -132,6 +133,9 @@ TRANSLATIONS = {
         "选择输出目录": "選擇輸出資料夾",
         "界面语言": "介面語言",
         "主题": "主題",
+        "界面缩放": "介面縮放",
+        "界面缩放提示": "縮放變更後需重新啟動程式才會完整生效。",
+        "自动": "自動",
         "默认深色": "預設深色",
         "深空蓝": "深空藍",
         "霓虹紫": "霓虹紫",
@@ -302,6 +306,9 @@ TRANSLATIONS = {
         "选择输出目录": "Choose output folder",
         "界面语言": "Language",
         "主题": "Theme",
+        "界面缩放": "UI Scale",
+        "界面缩放提示": "Scale changes take full effect after restarting the app.",
+        "自动": "Auto",
         "默认深色": "Default Dark",
         "深空蓝": "Deep Ocean",
         "霓虹紫": "Neon Purple",

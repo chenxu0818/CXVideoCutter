@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..core.ui_scale import ui_px
 from ..core.ffmpeg import format_time
 from ..core.i18n import tr
 from ..core.models import Chapter, MediaSource, StreamInfo
@@ -41,8 +42,8 @@ class TrackPanel(QWidget):
         head.addStretch(1)
         self.btn_all_on = QPushButton(tr("全选"))
         self.btn_all_off = QPushButton(tr("全不选"))
-        self.btn_all_on.setFixedWidth(48)
-        self.btn_all_off.setFixedWidth(58)
+        self.btn_all_on.setFixedWidth(ui_px(48))
+        self.btn_all_off.setFixedWidth(ui_px(58))
         self.btn_all_on.clicked.connect(lambda: self.setAll(True))
         self.btn_all_off.clicked.connect(lambda: self.setAll(False))
         head.addWidget(self.btn_all_on)
@@ -91,7 +92,7 @@ class TrackPanel(QWidget):
         self.chapter_list.itemDoubleClicked.connect(
             lambda item: self.chapterSelected.emit(float(item.data(Qt.ItemDataRole.UserRole)))
         )
-        self.chapter_list.setMinimumHeight(70)
+        self.chapter_list.setMinimumHeight(ui_px(70))
         root.addWidget(self.chapter_list, 2)
 
     # ------------------------------------------------------------------

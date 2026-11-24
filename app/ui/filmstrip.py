@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from ..core.ui_scale import ui_px
 from ..core.ffmpeg import extract_frame_window, format_time
 
 
@@ -202,7 +203,7 @@ class _FilmCell(QFrame):
 
         self.thumb = QLabel()
         self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.thumb.setFixedHeight(60)
+        self.thumb.setFixedHeight(ui_px(60))
         layout.addWidget(self.thumb)
 
         self.label = QLabel("-")
@@ -263,7 +264,7 @@ class FilmstripWidget(QWidget):
         self._root = QHBoxLayout(self)
         self._root.setContentsMargins(4, 2, 4, 2)
         self._root.setSpacing(4)
-        self.setFixedHeight(98)
+        self.setFixedHeight(ui_px(98))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     # ------------------------------------------------------------------

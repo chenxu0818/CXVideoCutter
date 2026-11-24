@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..core.ui_scale import ui_px
 from ..core.i18n import tr
 from ..core.models import ExportSettings
 
@@ -68,7 +69,7 @@ class ExportPanel(QWidget):
         self.edit_dir = QLineEdit()
         self.edit_dir.setPlaceholderText(tr("选择导出目录"))
         self.btn_browse = QPushButton(tr("浏览…"))
-        self.btn_browse.setFixedWidth(64)
+        self.btn_browse.setFixedWidth(ui_px(64))
         dir_layout.addWidget(self.edit_dir, 1)
         dir_layout.addWidget(self.btn_browse)
         self.btn_browse.clicked.connect(self._browse)

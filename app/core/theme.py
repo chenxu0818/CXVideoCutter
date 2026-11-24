@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import tempfile
 
+from .ui_scale import scale_stylesheet
+
 THEMES = {
     "default": {
         "name": "默认深色",
@@ -237,4 +239,10 @@ def build_stylesheet(code: str | None = None) -> str:
 def apply_theme(app, code: str) -> None:
     """设置当前主题并应用到全局（主窗口与所有对话框）。"""
     set_theme(code)
-    app.setStyleSheet(build_stylesheet(code))
+    p = palette()
+    # 音量条保持设计时的固定尺寸，不随界面缩放变大。
+    volume_fixed = f"""
+QSlider#volumeSlider::groove:horizontal {{ background: {p['border']}; height: 4px; border-radius: 2px; }}
+QSlider#volumeSlider::handle:horizontal {{ background: {p['accent']}; width: 12px; margin: -4px 0; border-radius: 6px; }}
+"""
+    app.setStyleSheet(scale_stylesheet(build_stylesheet(code), volume_fixed))

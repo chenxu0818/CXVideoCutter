@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QPushButton, QVBoxLayout, QWidget,
 )
 
+from ..core.ui_scale import ui_px
 from ..core.ffmpeg import format_time
 from ..core.i18n import tr
 from ..core.models import Segment
@@ -33,7 +34,7 @@ class _SegmentItem(QFrame):
 
         self.thumb = QLabel()
         self.thumb.setObjectName("thumb")
-        self.thumb.setFixedSize(96, 54)
+        self.thumb.setFixedSize(ui_px(96), ui_px(54))
         self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb.setText(tr("无预览"))
         root.addWidget(self.thumb)
@@ -58,9 +59,9 @@ class _SegmentItem(QFrame):
         btns = QVBoxLayout()
         btns.setSpacing(4)
         self.btn_locate = QPushButton(tr("定位"))
-        self.btn_locate.setFixedWidth(44)
+        self.btn_locate.setFixedWidth(ui_px(44))
         self.btn_remove = QPushButton(tr("删除"))
-        self.btn_remove.setFixedWidth(44)
+        self.btn_remove.setFixedWidth(ui_px(44))
         self.btn_locate.clicked.connect(lambda: self.locateClicked.emit(self.segment.id))
         self.btn_remove.clicked.connect(lambda: self.removeClicked.emit(self.segment.id))
         btns.addWidget(self.btn_locate)

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..core.ui_scale import ui_px
 from ..core.i18n import tr
 from ..core.logger import cleanup_old_logs, log_dir
 from .msgbox import show_warning
@@ -24,7 +25,7 @@ class LogViewDialog(QDialog):
     def __init__(self, path: str, day: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"{tr('日志')} - {day}")
-        self.resize(820, 560)
+        self.resize(ui_px(820), ui_px(560))
         layout = QVBoxLayout(self)
 
         self.text = QPlainTextEdit(self)
@@ -53,7 +54,7 @@ class LogDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(tr("日志"))
-        self.resize(720, 420)
+        self.resize(ui_px(720), ui_px(420))
         self._paths: List[str] = []
         self._view_buttons: List[QPushButton] = []
 

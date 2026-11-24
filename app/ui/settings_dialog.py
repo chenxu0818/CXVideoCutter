@@ -12,18 +12,19 @@ from PySide6.QtWidgets import (
 
 from ..core.i18n import LANGUAGES, tr
 from ..core.theme import THEME_CHOICES
+from ..core.ui_scale import SCALE_CHOICES, ui_px
 from .app_icon import app_icon
 
 
 class SettingsDialog(QDialog):
     def __init__(
         self, output_dir: str, language: str, theme: str = "default",
-        allow_overlap: bool = True, parent=None,
+        allow_overlap: bool = True, ui_scale: str = "auto", parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(tr("设置…"))
         self.setWindowIcon(app_icon())
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(ui_px(520))
 
         root = QVBoxLayout(self)
         form = QFormLayout()
@@ -45,6 +46,16 @@ class SettingsDialog(QDialog):
         if index >= 0:
             self.combo_theme.setCurrentIndex(index)
         form.addRow(self.label_theme, self.combo_theme)
+
+        self.label_scale = QLabel(tr("界面缩放"))
+        self.combo_scale = QComboBox()
+        for code, name in SCALE_CHOICES:
+            self.combo_scale.addItem(tr(name), code)
+        index = self.combo_scale.findData(ui_scale)
+        if index >= 0:
+            self.combo_scale.setCurrentIndex(index)
+        self.combo_scale.setToolTip(tr("界面缩放提示"))
+        form.addRow(self.label_scale, self.combo_scale)
 
         self.chk_allow_overlap = QCheckBox(tr("允许片段重叠"))
         self.chk_allow_overlap.setChecked(bool(allow_overlap))
@@ -94,14 +105,16 @@ class SettingsDialog(QDialog):
         self.edit_dir.setText(self.default_dir)
         self.combo_lang.setCurrentIndex(0)
         self.combo_theme.setCurrentIndex(0)
+        self.combo_scale.setCurrentIndex(0)
         self.chk_allow_overlap.setChecked(True)
 
-    def values(self) -> tuple[str, str, str, bool]:
+    def values(self) -> tuple[str, str, str, bool, str]:
         return (
             self.edit_dir.text().strip(),
             self.combo_lang.currentData(),
             self.combo_theme.currentData(),
             self.chk_allow_overlap.isChecked(),
+            self.combo_scale.currentData(),
         )
 
     def _retranslate_buttons(self) -> None:
@@ -112,6 +125,8 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(tr("设置…"))
         self.label_lang.setText(tr("界面语言"))
         self.label_theme.setText(tr("主题"))
+        self.label_scale.setText(tr("界面缩放"))
+        self.combo_scale.setToolTip(tr("界面缩放提示"))
         self.chk_allow_overlap.setText(tr("允许片段重叠"))
         self.chk_allow_overlap.setToolTip(tr("关闭后，新片段不能与已有片段重复或重叠。"))
         self.label_dir.setText(tr("视频保存目录"))
@@ -123,3 +138,5 @@ class SettingsDialog(QDialog):
             self.combo_lang.setItemText(i, name)
         for i, (_code, name) in enumerate(THEME_CHOICES):
             self.combo_theme.setItemText(i, tr(name))
+        for i, (_code, name) in enumerate(SCALE_CHOICES):
+            self.combo_scale.setItemText(i, tr(name))

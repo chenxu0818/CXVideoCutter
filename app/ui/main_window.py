@@ -7,8 +7,8 @@ import tempfile
 from fractions import Fraction
 from typing import List
 
-from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import QRect, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -25,6 +25,7 @@ from ..core.models import Chapter, MediaSource, Segment
 from ..core.settings import AppSettings, default_output_dir
 from ..core.taskbar_progress import TaskbarProgress
 from ..core.theme import apply_theme
+from ..core.ui_scale import ui_px
 from ..version import APP_VERSION_TAG
 from .app_icon import app_icon
 from .export_dialog import ExportDialog
@@ -49,8 +50,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(tr("CXVideoCutter - 无损视频剪辑"))
         self.setWindowIcon(app_icon())
-        self.resize(1440, 920)
-        self.setMinimumSize(1100, 700)
+        self.setMinimumSize(ui_px(1100), ui_px(700))
+        self._restore_window_geometry()
 
         # 数据
         self.sources: List[MediaSource] = []
@@ -113,6 +114,42 @@ class MainWindow(QMainWindow):
         self._update_segment_ui()
         self._update_track_ui()
         self.statusBar().showMessage(f"FFmpeg: {probe_version()}")
+
+    # ------------------------------------------------------------------
+    # 窗口尺寸自适应
+    # ------------------------------------------------------------------
+    def _fit_window_to_screen(self) -> None:
+        """按可用屏幕空间设置初始窗口大小，并居中显示。"""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            self.resize(ui_px(1440), ui_px(920))
+            return
+        available = screen.availableGeometry()
+        width = min(int(available.width() * 0.9), ui_px(1440))
+        height = min(int(available.height() * 0.9), ui_px(920))
+        width = max(width, min(ui_px(1100), available.width()))
+        height = max(height, min(ui_px(700), available.height()))
+        self.resize(width, height)
+        self.move(
+            available.x() + (available.width() - width) // 2,
+            available.y() + (available.height() - height) // 2,
+        )
+
+    def _restore_window_geometry(self) -> None:
+        """恢复上次的窗口几何；首次启动或几何失效时按屏幕自适应。"""
+        saved = self.app_settings.window_geometry()
+        if saved:
+            try:
+                x, y, width, height = (int(part) for part in saved.split(","))
+                geometry = QRect(x, y, width, height)
+                if (geometry.width() >= self.minimumWidth()
+                        and geometry.height() >= self.minimumHeight()
+                        and QGuiApplication.screenAt(geometry.center()) is not None):
+                    self.setGeometry(geometry)
+                    return
+            except (ValueError, TypeError):
+                pass
+        self._fit_window_to_screen()
 
     # ------------------------------------------------------------------
     # 静帧预览
@@ -252,7 +289,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(spacer)
         self.btn_export_top = QPushButton(tr("导出"))
         self.btn_export_top.setObjectName("primaryButton")
-        self.btn_export_top.setFixedWidth(90)
+        self.btn_export_top.setFixedWidth(ui_px(90))
         self.btn_export_top.clicked.connect(self.open_export_dialog)
         toolbar.addWidget(self.btn_export_top)
 
@@ -271,7 +308,7 @@ class MainWindow(QMainWindow):
         self.preview_stack.addWidget(self.frame_view)     # 页 0：静帧
         self.preview_stack.addWidget(self.video_widget)   # 页 1：实时播放
         preview_layout.addWidget(self.preview_stack, 1)
-        self.preview.setMinimumHeight(320)
+        self.preview.setMinimumHeight(ui_px(320))
         self.preview_stack.setCurrentIndex(0)
         # 左侧上下分割：视频预览高度可拖拽调整，右侧仍可调整宽度
         left_splitter = QSplitter(Qt.Orientation.Vertical)
@@ -281,7 +318,7 @@ class MainWindow(QMainWindow):
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(2)
         left_splitter.addWidget(controls)
-        left_splitter.setSizes([560, 360])
+        left_splitter.setSizes([ui_px(560), ui_px(360)])
         left_splitter.setStretchFactor(0, 1)
         left_splitter.setStretchFactor(1, 0)
         left_splitter.setCollapsible(0, True)
@@ -294,17 +331,18 @@ class MainWindow(QMainWindow):
         # 播放控制
         play_row = QHBoxLayout()
         self.btn_play = QPushButton(tr("▶ 播放"))
-        self.btn_play.setFixedWidth(84)
+        self.btn_play.setFixedWidth(ui_px(84))
         self.btn_stop = QPushButton(tr("■ 停止"))
-        self.btn_stop.setFixedWidth(70)
+        self.btn_stop.setFixedWidth(ui_px(70))
         self.position_slider = QSlider(Qt.Orientation.Horizontal)
         self.time_label = QLabel("00:00:00.000 / 00:00:00.000")
-        self.time_label.setMinimumWidth(230)
+        self.time_label.setMinimumWidth(ui_px(230))
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.btn_mute = QPushButton(tr("静音"))
         self.btn_mute.setCheckable(True)
-        self.btn_mute.setFixedWidth(48)
+        self.btn_mute.setFixedWidth(ui_px(48))
         self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider.setObjectName("volumeSlider")
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(80)
         self.volume_slider.setFixedWidth(84)
@@ -372,8 +410,8 @@ class MainWindow(QMainWindow):
         io_row.addStretch(1)
         self.btn_zoom_out = QPushButton(tr("缩小 −"))
         self.btn_zoom_in = QPushButton(tr("放大 +"))
-        self.btn_zoom_out.setFixedWidth(58)
-        self.btn_zoom_in.setFixedWidth(58)
+        self.btn_zoom_out.setFixedWidth(ui_px(58))
+        self.btn_zoom_in.setFixedWidth(ui_px(58))
         self.btn_zoom_in.clicked.connect(self.timeline.zoomIn)
         self.btn_zoom_out.clicked.connect(self.timeline.zoomOut)
         io_row.addSpacing(16)
@@ -443,13 +481,13 @@ class MainWindow(QMainWindow):
     def _vseparator() -> QWidget:
         """竖向分隔符：自带左右等宽留白，保证前后间隔一致。"""
         wrapper = QWidget()
-        wrapper.setFixedWidth(21)
+        wrapper.setFixedWidth(ui_px(21))
         layout = QHBoxLayout(wrapper)
-        layout.setContentsMargins(9, 0, 9, 0)
+        layout.setContentsMargins(ui_px(9), 0, ui_px(9), 0)
         layout.setSpacing(0)
         line = QWidget()
         line.setObjectName("vsep")
-        line.setFixedSize(3, 22)
+        line.setFixedSize(ui_px(3), ui_px(22))
         layout.addWidget(line)
         return wrapper
 
@@ -462,8 +500,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
         prev = QPushButton("◀")
         nxt = QPushButton("▶")
-        prev.setFixedWidth(30)
-        nxt.setFixedWidth(30)
+        prev.setFixedWidth(ui_px(30))
+        nxt.setFixedWidth(ui_px(30))
         prev.clicked.connect(lambda: self.step(-1, mode))
         nxt.clicked.connect(lambda: self.step(1, mode))
         layout.addWidget(prev)
@@ -819,12 +857,14 @@ class MainWindow(QMainWindow):
     # 设置与导出
     # ------------------------------------------------------------------
     def open_settings(self) -> None:
+        old_ui_scale = self.app_settings.ui_scale()
         dialog = SettingsDialog(
             self.app_settings.output_dir(), self.app_settings.language(),
-            self.app_settings.theme(), self.app_settings.allow_segment_overlap(), self,
+            self.app_settings.theme(), self.app_settings.allow_segment_overlap(),
+            self.app_settings.ui_scale(), self,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            output_dir, language, theme, allow_overlap = dialog.values()
+            output_dir, language, theme, allow_overlap, ui_scale = dialog.values()
             if not output_dir:
                 output_dir = default_output_dir()
             os.makedirs(output_dir, exist_ok=True)
@@ -832,12 +872,16 @@ class MainWindow(QMainWindow):
             self.app_settings.set_language(language)
             self.app_settings.set_theme(theme)
             self.app_settings.set_allow_segment_overlap(allow_overlap)
+            self.app_settings.set_ui_scale(ui_scale)
             set_language(language)
             apply_theme(QApplication.instance(), theme)
             self.export_panel.setOutputDir(output_dir)
             self.retranslate()
             self.timeline.canvas.update()
-            self.statusBar().showMessage(tr("设置已保存"))
+            message = tr("设置已保存")
+            if ui_scale != old_ui_scale:
+                message += "　" + tr("界面缩放提示")
+            self.statusBar().showMessage(message)
 
     def open_logs(self) -> None:
         cleanup_old_logs(30)
@@ -976,6 +1020,10 @@ class MainWindow(QMainWindow):
         show_about(self, tr("关于"), about_text + probe_version())
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        geometry = self.geometry()
+        self.app_settings.set_window_geometry(
+            f"{geometry.x()},{geometry.y()},{geometry.width()},{geometry.height()}"
+        )
         self._taskbar.reset()
         self.player.stop()
         self._thumb_loader.stop()

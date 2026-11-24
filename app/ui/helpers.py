@@ -11,6 +11,7 @@ from PySide6.QtCore import QMutex, QMutexLocker, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QLineEdit, QSizePolicy, QWidget
 
+from ..core.ui_scale import ui_px
 from ..core.ffmpeg import extract_frame, format_time, get_keyframes, parse_time
 
 
@@ -175,7 +176,7 @@ class TimeEdit(QLineEdit):
         self.setSeconds(seconds)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.setMinimumWidth(110)
+        self.setMinimumWidth(ui_px(110))
         self.editingFinished.connect(self._on_editing_finished)
         self._value = seconds
 

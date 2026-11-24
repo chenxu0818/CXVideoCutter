@@ -78,19 +78,19 @@ codesign -s - --force "$FF_DIR/ffmpeg" 2>/dev/null || true
 codesign -s - --force "$FF_DIR/ffprobe" 2>/dev/null || true
 file "$FF_DIR/ffmpeg" "$FF_DIR/ffprobe"
 
-# 3) macOS 应用图标：把 ICO 转成 ICNS（若可用）
-#    使用字符串变量以兼容 macOS 自带的 bash 3.2（空数组在 set -u 下会报错）
+# 3) macOS 应用图标：从 ICO 内嵌的原生 PNG 帧构建 icns。
+#    不要用 sips 直接读 ICO：不同 macOS 版本行为不一致，且旧脚本用
+#    `|| true` 吞掉失败，会生成残缺 iconset 导致 .app 显示默认图标。
 ICON_PATH=""
+ICNS="$ROOT/build_tools/macos/cxvc.icns"
 if command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
-  ICONSET="$ROOT/build_tools/macos/cxvc.iconset"
-  rm -rf "$ICONSET"; mkdir -p "$ICONSET"
-  for sz in 16 32 64 128 256 512; do
-    sips -z $sz $sz "$ROOT/app/resources/icon.ico" --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null 2>&1 || true
-    sips -z $((sz*2)) $((sz*2)) "$ROOT/app/resources/icon.ico" --out "$ICONSET/icon_${sz}x${sz}@2x.png" >/dev/null 2>&1 || true
-  done
-  if iconutil -c icns "$ICONSET" -o "$ROOT/build_tools/macos/cxvc.icns"; then
-    ICON_PATH="$ROOT/build_tools/macos/cxvc.icns"
+  $PY "$ROOT/build_tools/macos/make_icns.py"
+  if [ -s "$ICNS" ]; then
+    ICON_PATH="$ICNS"
   fi
+fi
+if [ -z "$ICON_PATH" ]; then
+  echo "警告：未能生成 icns，打包将使用默认图标" >&2
 fi
 
 # 4) PyInstaller 打包为 .app bundle
@@ -116,9 +116,18 @@ $PY -m PyInstaller "${PYI_ARGS[@]}" \
 
 APP="$OUT/CXVideoCutter.app"
 # 写入版本号（Finder 显示与包属性均可见）
-plutil -replace CFBundleShortVersionString -string "1.0.0" "$APP/Contents/Info.plist"
-plutil -replace CFBundleVersion -string "1.0.0" "$APP/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "1.0.1" "$APP/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "1.0.1" "$APP/Contents/Info.plist"
 # ad-hoc 签名整个 app（本机运行无需开发者证书；分发给他人需 notarization）
 codesign -s - --force --deep "$APP" 2>/dev/null || true
+
+# 校验 bundle 里确实带上了自定义图标，避免再次出现默认图标问题
+ICON_NAME="$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist" 2>/dev/null || true)"
+BUNDLE_ICNS="$(find "$APP/Contents/Resources" -maxdepth 1 -iname '*.icns' -print -quit 2>/dev/null || true)"
+if [ -z "$ICON_NAME" ] || [ -z "$BUNDLE_ICNS" ]; then
+  echo "错误：.app 内缺少图标（CFBundleIconFile=$ICON_NAME, icns=$BUNDLE_ICNS）" >&2
+  exit 1
+fi
+echo "bundle 图标：$ICON_NAME -> $(basename "$BUNDLE_ICNS")"
 echo "完成：$APP"
-echo "可将该 .app 压缩分发：cd \"$OUT\" && zip -ry CXVideoCutter-v1.0.0-macos-arm64.zip CXVideoCutter.app"
+echo "可将该 .app 压缩分发：cd \"$OUT\" && zip -ry CXVideoCutter-v1.0.1-macos-arm64.zip CXVideoCutter.app"
