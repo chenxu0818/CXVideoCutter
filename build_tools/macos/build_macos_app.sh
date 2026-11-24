@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # 在 Apple Silicon (arm64) Mac 上构建 CXVideoCutter.app
 # 用法：在 macOS 终端执行  bash build_macos_app.sh
-# 不使用 pipefail：CI 上部分 macOS runner 的 bash 不支持该选项
-set -eu
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
